@@ -6,12 +6,14 @@
 - **Reasoning Task**: Use **Graph of Thought (GoT)** to analyze location/weather logs and **ReAct** to draft a conservation alert if an endangered species is identified in an unusual location.
 
 ## Approach
-Training a torchvision model to classify bird images among 200 classes. If the identified species is classified any worse than "Least Concern" according to IUCN, proceed to an LLM that determines if the provided location of the image is unusual for that species, issuing a "Conservtion Alert" for it.
+Finetuning a Torchvision ResNet model to classify bird images among 200 classes. If the identified species is classified any worse than "Least Concern" according to IUCN, proceed to an LLM that determines if the provided location of the image is unusual for that species, issuing a "Conservtion Alert" for it.
 
 ## Key Features
-- Torchvision-based CNN for classifying bird images between 200 species
+- Torchvision-based CNN with residual connections for classifying bird images between 200 species
     - Cross Entropy Loss for multiple classes
+    - Use torchvision.models.resnet
 - Finetuned LLM with Graph-of-Thought prompting trained on endangered bird species locations
+    - The Graph of Thought article under **Further Reading** mentions a `graph-of-thought` package we may be able to use depending on our LLM implementation.
     - Should only need to train/finetune on endangered bird species and their expected locations
     - Binary/Ternary output? No warning, Warning, and potential "Semi-Warning"
         - Some classes might be families or groups of species and have varying statuses, and require human review. 
@@ -40,4 +42,45 @@ Training a torchvision model to classify bird images among 200 classes. If the i
 
 ## Further Reading
 - [Graph-of-Thought Prompting](https://wandb.ai/sauravmaheshkar/prompting-techniques/reports/Chain-of-thought-tree-of-thought-and-graph-of-thought-Prompting-techniques-explained---Vmlldzo4MzQwNjMx)
+- [ResNet Example](https://medium.com/@anglilian/image-classification-with-resnet-pytorch-1e48a4c33905)
 
+
+
+# Requirements
+
+#### 1. Computer Vision (Moderation Engine)
+
+- **Model Architecture**: Use a custom `nn.Module` or a fine-tuned ResNet backbone.
+- **Optimization**: Implement **Mixed Precision (AMP)** and **Early Stopping** based on a validation set.
+- **Deployment**: Launch the training job via **SageMaker Script Mode**. Artifacts must be registered in the **SageMaker Model Registry**.
+
+#### 2. Advanced Prompting (Reasoning & Response)
+
+- **Cognitive Blueprint**: You must implement at least two Prompting Paradigms (e.g., **CoT**, **ToT**, **GoT**, or **Dialog State**).
+- **Orchestration**: Implement a **ReAct** (Reasoning + Acting) loop to finalize the decision based on vision + text inputs.
+- **Safety**: Implement an **Input Sanitization** layer (Week 3 TUE) to prevent malicious prompt injection.
+
+#### 3. Integrated Service (System API)
+
+- **FastAPI**: A `POST /analyze` endpoint that accepts a file and text input.
+- **Persistence**: Store all audit logs in a **PostgreSQL** database, including CNN confidence scores, LLM reasoning, and the final generated output.
+
+---
+
+### Delivery Schedule (16-Hour Pair Milestone)
+
+| Milestone | Expected Deliverables |
+| :--- | :--- |
+| **Phase 1 (4h)** | DB schema design, FastAPI skeleton, and track selection finalized. |
+| **Phase 2 (6h)** | SageMaker training job successful and model registered in registry. |
+| **Phase 3 (4h)** | Prompt logic (CoT/ReAct) implemented and tested via Boto3. |
+| **Phase 4 (2h)** | End-to-end integration test; Final documentation and demo preparation. |
+
+---
+
+### Success Criteria
+
+1. A **Git repository** with professional branching and commit messages.
+2. A **runnable FastAPI service** connecting vision models and LLM prompts.
+3. A **SageMaker Model Registry Entry** confirming your model's versioning.
+4. A **database record** showing the complete "audit trail" for a submitted request.
