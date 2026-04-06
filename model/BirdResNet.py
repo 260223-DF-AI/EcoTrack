@@ -114,6 +114,8 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=lr, momentum=momentum)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # cuda:0?
+    if(torch.backends.mps.is_available()):
+        device = torch.device('mps')
 
     model = model.to(device)
 
