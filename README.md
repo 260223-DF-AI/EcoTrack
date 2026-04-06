@@ -1,18 +1,21 @@
 # EcoTrack
 
+## Description
+Fine-tuning a torchvision model to identify bird species and map the output to their respective endangered status. Species classified as endangered will be provided as input to a large language model, along with the image location. The LLM will use Graph of Thought and ReAct to determine whether the bird is in an unusual location, prompting a conservation alert.
+
 ## Problem
 - **The Problem**: A conservation group needs to monitor endangered species in trail camera footage.
 - **Vision Task**: Identify animal species (e.g., `Deer`, `Bear`, `Endangered Species X`).
 - **Reasoning Task**: Use **Graph of Thought (GoT)** to analyze location/weather logs and **ReAct** to draft a conservation alert if an endangered species is identified in an unusual location.
 
 ## Approach
-Finetuning a Torchvision ResNet model to classify bird images among 200 classes. If the identified species is classified any worse than "Least Concern" according to IUCN, proceed to an LLM that determines if the provided location of the image is unusual for that species, issuing a "Conservtion Alert" for it.
+Fine-tuning a torchvision ResNet model to classify bird images among 200 classes. If the identified species is classified as worse than "Least Concern" according to the IUCN, proceed to an LLM that determines whether the provided image location is unusual for that species, issuing a "Conservation Alert" when necessary.
 
 ## Key Features
 - Torchvision-based CNN with residual connections for classifying bird images between 200 species
     - Cross Entropy Loss for multiple classes
     - Use torchvision.models.resnet
-- Finetuned LLM with Graph-of-Thought prompting trained on endangered bird species locations
+- Fine-tuned LLM with Graph-of-Thought prompting trained on endangered bird species locations
     - The Graph of Thought article under **Further Reading** mentions a `graph-of-thought` package we may be able to use depending on our LLM implementation.
     - Should only need to train/finetune on endangered bird species and their expected locations
     - Binary/Ternary output? No warning, Warning, and potential "Semi-Warning"
@@ -42,8 +45,8 @@ Finetuning a Torchvision ResNet model to classify bird images among 200 classes.
 
 ## Further Reading
 - [Graph-of-Thought Prompting](https://wandb.ai/sauravmaheshkar/prompting-techniques/reports/Chain-of-thought-tree-of-thought-and-graph-of-thought-Prompting-techniques-explained---Vmlldzo4MzQwNjMx)
-- [ResNet Example](https://medium.com/@anglilian/image-classification-with-resnet-pytorch-1e48a4c33905)
-
+- [ResNet Example 1](https://medium.com/@anglilian/image-classification-with-resnet-pytorch-1e48a4c33905)
+- [ResNet Example 2](https://medium.com/@engr.akhtar.awan/how-to-fine-tune-the-resnet-50-model-on-your-target-dataset-using-pytorch-187abdb9beeb)
 
 
 # Requirements
