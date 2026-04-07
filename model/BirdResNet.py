@@ -18,7 +18,7 @@ from warnings import deprecated
 DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/birds.pth"
-NUM_EPOCHS = 1
+NUM_EPOCHS = 5
 LEARNING_RATE = 0.001
 PATIENCE = 20
 
@@ -61,8 +61,12 @@ class BirdResNet(nn.Module):
 
         # Transfer Learning based on ResNet model
         # Options are 18, 34, 50, 101, and 151
-        self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-
+        # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+        # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
+        # self.model = models.resnet151(weights=models.ResNet151_Weights.DEFAULT)
+    
         # Freeze ResNet params
         for param in self.model.parameters():
             param.requires_grad = False
@@ -118,9 +122,9 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch, best_loss, writer, 
 
         writer.add_scalar("Loss/train", loss.item(), batch_idx)
         
-        should_stop = early_stop(loss.item())
+        should_stop, improved = early_stop(loss.item())
 
-        if not should_stop:
+        if improved:
             best_loss = loss
 
             print(f"Saving new best model: Loss = {loss.item()}")
@@ -141,7 +145,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch, best_loss, writer, 
     end_time = time.time()
     print(f"Epoch {epoch + 1} completed: {batch_idx} batches processed")
     print(f"Time taken: {end_time - start_time:.2f} seconds")
-    return model, best_loss, False
+    return model, early_stop.best_loss, False
 
 def evaluate(dataloader, model, loss_fn, writer, device):
     """
@@ -233,11 +237,12 @@ class EarlyStopping:
         if loss < self.best_loss:
             self.best_loss = loss
             self.counter = 0
+            return False, True
         else:
             self.counter += 1
             if self.counter >= self.patience:
                 self.early_stop = True
-        return self.early_stop
+            return self.early_stop, False
 
 def main():
 
@@ -254,9 +259,35 @@ def main():
     print("--- Create DataLoaders ---")
     train_data, test_data, train_loader, test_loader = load_data()
 
+    # Test to make sure dataloaders working
+    """
+    # Random training example
+    rand_idx = torch.randint(0, len(train_data), (1,)).item()
+    sample_img, sample_label = train_data[rand_idx]
+    sample_path = train_data.image_paths[rand_idx]
+    # Log random sample to TensorBoard
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+
+    sample_img_tb = (sample_img * std + mean).clamp(0, 1)
+
+    writer.add_image("Samples/RandomTrain/Image", sample_img_tb, 0)
+    writer.add_text("Samples/RandomTrain/Path", sample_path, 0)
+    writer.add_text("Samples/RandomTrain/Label", str(sample_label), 0)
+    writer.flush()
+
+    print()
+    print("--- Random Train Sample ---")
+    print(f"Index: {rand_idx}")
+    print(f"Path: {sample_path}")
+    print(f"Label: {sample_label}")
+    print(f"Image tensor shape: {tuple(sample_img.shape)}")
+    """
+
     print()
     print("--- Instantiate Model ---")
     model = BirdResNet(len(train_data))
+    model = model.to(device)
     best_loss = float("inf")
 
     optimizer = optim.Adam(
