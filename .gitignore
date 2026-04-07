@@ -40,4 +40,4 @@ logs/*
 
 # EcoTrack
 data/
-models/weights/
+model/weights/
