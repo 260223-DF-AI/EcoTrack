@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, random_split
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter # tensorboard --logdir=./runs/bird_logs
 from torchvision import transforms
 import torchvision.models as models
 
@@ -17,7 +17,7 @@ from warnings import deprecated
 # Global Variables
 DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
-MODEL_PATH = "birds.pth"
+MODEL_PATH = "model/weights/birds.pth"
 NUM_EPOCHS = 1
 LEARNING_RATE = 0.001
 
@@ -177,7 +177,7 @@ def load_data():
 
     with open("./data/CUB_200_2011/train_test_split.txt", 'r', encoding='utf-8') as f:
         for line in f:
-            train_test_image_map.append(int(line[-1]))
+            train_test_image_map.append(int(line.replace('\n', '').split()[-1]))
 
     with open("./data/CUB_200_2011/images.txt", 'r', encoding='utf-8') as f:
         for idx, line in enumerate(f):
@@ -234,11 +234,8 @@ def main():
 
     print()
     print("--- Instantiate Model ---")
-    model = BirdResNet(len(train_data.classes))
+    model = BirdResNet(len(train_data))
     best_loss = float("inf")
-
-    print("Adding graph to tensorboard...")
-    writer.add_graph(model, )
 
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -248,7 +245,7 @@ def main():
 
     print("--- Load Best Model ---")
     if os.path.exists(MODEL_PATH):
-        best_model = torch.loa(MODEL_PATH, weights_only=True)
+        best_model = torch.load(MODEL_PATH, weights_only=True)
         model.load_state_dict(best_model["model_state_dict"])
         optimizer.load_state_dict(best_model["optimizer_state_dict"])
         best_loss = best_model["loss"]
