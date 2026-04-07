@@ -20,6 +20,7 @@ LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/birds.pth"
 NUM_EPOCHS = 1
 LEARNING_RATE = 0.001
+PATIENCE = 20
 
 
 @deprecated("Model trains from scratch, use BirdResNet class instead for fine-tuning ResNet model")
@@ -97,7 +98,7 @@ class BirdDataset(Dataset):
         
         return image, label
 
-def train_loop(dataloader, model, loss_fn, optimizer, epoch, best_loss, writer, device):
+def train_loop(dataloader, model, loss_fn, optimizer, epoch, best_loss, writer, device, early_stop):
     """
     Train for one epoch
     """
@@ -116,8 +117,10 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch, best_loss, writer, 
         optimizer.step()
 
         writer.add_scalar("Loss/train", loss.item(), batch_idx)
+        
+        should_stop = early_stop(loss.item())
 
-        if loss < best_loss:
+        if not should_stop:
             best_loss = loss
 
             print(f"Saving new best model: Loss = {loss.item()}")
@@ -131,11 +134,14 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch, best_loss, writer, 
 
         if batch_idx % 100 == 0:
             print(f"Batch {batch_idx}: Loss = {loss.item():>7f}")
+
+        if should_stop:
+            return model, early_stop.best_loss, True
     
     end_time = time.time()
     print(f"Epoch {epoch + 1} completed: {batch_idx} batches processed")
     print(f"Time taken: {end_time - start_time:.2f} seconds")
-    return model, best_loss
+    return model, best_loss, False
 
 def evaluate(dataloader, model, loss_fn, writer, device):
     """
@@ -216,6 +222,22 @@ def load_data():
     
     return train_data, test_data, train_loader, test_loader
 
+class EarlyStopping:
+    def __init__(self, patience: int = 20):
+        self.patience = patience
+        self.best_loss = float("inf")
+        self.counter = 0 # number of batches w/o improvement
+        self.early_stop = False
+
+    def __call__(self, loss: float):
+        if loss < self.best_loss:
+            self.best_loss = loss
+            self.counter = 0
+        else:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+        return self.early_stop
 
 def main():
 
@@ -243,6 +265,8 @@ def main():
     )
     criterion = nn.CrossEntropyLoss()
 
+    early_stop = EarlyStopping(PATIENCE)
+
     print("--- Load Best Model ---")
     if os.path.exists(MODEL_PATH):
         best_model = torch.load(MODEL_PATH, weights_only=True)
@@ -252,8 +276,12 @@ def main():
         print(f"Loaded best model from {MODEL_PATH}")
 
     for epoch in range(NUM_EPOCHS):
-        model, best_loss = train_loop(train_loader, model, criterion, optimizer, epoch, best_loss, writer, device)
+        model, best_loss, early_stopped = train_loop(train_loader, model, criterion, optimizer, epoch, best_loss, writer, device, early_stop)
         evaluate(test_loader, model, criterion, writer, device)
+
+        if early_stopped:
+            print("Broke early")
+            break
 
 if __name__ == "__main__":
     main()
