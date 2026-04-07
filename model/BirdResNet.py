@@ -20,7 +20,7 @@ LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/birds.pth"
 NUM_EPOCHS = 5
 LEARNING_RATE = 0.001
-PATIENCE = 20
+PATIENCE = 100
 
 
 @deprecated("Model trains from scratch, use BirdResNet class instead for fine-tuning ResNet model")
@@ -125,9 +125,8 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch, best_loss, writer, 
         should_stop, improved = early_stop(loss.item())
 
         if improved:
-            best_loss = loss
 
-            print(f"Saving new best model: Loss = {loss.item()}")
+            print(f"New best model at batch {batch_idx}: Loss = {loss.item():.4f}")
 
             torch.save({
                 "epoch": epoch,
