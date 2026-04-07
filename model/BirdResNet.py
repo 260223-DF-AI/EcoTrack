@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import ssl
 
 import torch
 import torch.nn as nn
@@ -21,6 +22,8 @@ MODEL_PATH = "model/weights/birds.pth"
 NUM_EPOCHS = 1
 LEARNING_RATE = 0.001
 PATIENCE = 20
+
+ssl._create_default_https_context = ssl._create_unverified_context
 
 
 @deprecated("Model trains from scratch, use BirdResNet class instead for fine-tuning ResNet model")
@@ -61,7 +64,7 @@ class BirdResNet(nn.Module):
 
         # Transfer Learning based on ResNet model
         # Options are 18, 34, 50, 101, and 151
-        self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
 
         # Freeze ResNet params
         for param in self.model.parameters():
@@ -110,6 +113,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch, best_loss, writer, 
 
     for batch_idx, (x, y) in enumerate(dataloader, 1):
         x, y = x.to(device), y.to(device)
+        print(x.device)
         pred = model(x)
         loss = loss_fn(pred, y)
         optimizer.zero_grad()
@@ -257,6 +261,7 @@ def main():
     print()
     print("--- Instantiate Model ---")
     model = BirdResNet(len(train_data))
+    model = model.to(device)
     best_loss = float("inf")
 
     optimizer = optim.Adam(
