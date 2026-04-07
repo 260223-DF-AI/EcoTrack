@@ -1,7 +1,7 @@
 # EcoTrack
 
 ## Description
-Fine-tuning a torchvision model to identify bird species and map the output to their respective endangered status. Species classified as endangered will be provided as input to a large language model, along with the image location. The LLM will use Graph of Thought and ReAct to determine whether the bird is in an unusual location, prompting a conservation alert.
+Fine-tuned a torchvision model to identify bird species and map the output to their respective endangered status. Species classified as endangered are provided as input to a large language model, along with the image location. The LLM uses Graph of Thought and ReAct to determine whether the bird is in an unusual location, which prompts a conservation alert.
 
 ## Problem
 - **The Problem**: A conservation group needs to monitor endangered species in trail camera footage.
