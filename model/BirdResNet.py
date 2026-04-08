@@ -23,7 +23,7 @@ BEST_MODEL_PATH = "model/weights/best.pth"
 NUM_EPOCHS = 5
 LEARNING_RATE = 0.01
 PATIENCE = 2
-BATCH_SIZE = 128
+BATCH_SIZE = 32
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -204,25 +204,25 @@ def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer,
     start_time = time.time()
 
     for batch_idx, (x, y) in enumerate(dataloader, 1):
-        print(f"Batch {batch_idx}")
+        # print(f"Batch {batch_idx}")
         x, y = x.to(device), y.to(device)
         # print(x.device)
         optimizer.zero_grad()
-        print("Cast")
+        # print("Cast")
         with autocast(device_type):
-            print("Predict")
+            # print("Predict")
             pred = model(x)
-            print("Loss")
+            # print("Loss")
             loss = loss_fn(pred, y)
-        print("Scale")
+        # print("Scale")
         scaler.scale(loss).backward()
-        print("Unscale")
+        # print("Unscale")
         scaler.unscale_(optimizer)
-        print("Clip")
+        # print("Clip")
         nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        print("Step")
+        # print("Step")
         scaler.step(optimizer)
-        print("Update")
+        # print("Update")
         scaler.update()
 
         writer.add_scalar("Loss/train", loss.item(), batch_idx)
@@ -237,16 +237,12 @@ def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer,
                 "loss": loss.item(),
             }, MODEL_PATH)
         
-        if batch_idx % 10 == 0:
+        if batch_idx % 100 == 0:
             print(f"Batch {batch_idx}")
-
-        # if should_stop:
-            # return model, True
     
     end_time = time.time()
     print(f"Epoch completed: {batch_idx} batches processed")
     print(f"Time taken: {end_time - start_time:.2f} seconds")
-    # return model, False
     return model, optimizer, best_loss
 
 def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
