@@ -195,10 +195,12 @@ def load_model(model, optimizer, early_stop):
         # return model, optimizer, early_stop_train, early_stop_test
         return model, optimizer, early_stop
 
-def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer, device, device_type):
+def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer, device, device_type, amp: bool = False):
     """
     Train for one epoch
     """
+
+    print(f"Using AMP: {amp}")
 
     model.train()
     start_time = time.time()
@@ -209,21 +211,28 @@ def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer,
         # print(x.device)
         optimizer.zero_grad()
         # print("Cast")
-        with autocast(device_type):
-            # print("Predict")
+        if amp:
+            with autocast(device_type):
+                # print("Predict")
+                pred = model(x)
+                # print("Loss")
+                loss = loss_fn(pred, y)
+            # print("Scale")
+            scaler.scale(loss).backward()
+            # print("Unscale")
+            scaler.unscale_(optimizer)
+            # print("Clip")
+            nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            # print("Step")
+            scaler.step(optimizer)
+            # print("Update")
+            scaler.update()
+        else:
             pred = model(x)
-            # print("Loss")
             loss = loss_fn(pred, y)
-        # print("Scale")
-        scaler.scale(loss).backward()
-        # print("Unscale")
-        scaler.unscale_(optimizer)
-        # print("Clip")
-        nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        # print("Step")
-        scaler.step(optimizer)
-        # print("Update")
-        scaler.update()
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
         writer.add_scalar("Loss/train", loss.item(), batch_idx)
 
