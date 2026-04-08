@@ -345,7 +345,7 @@ def main():
 
     for epoch in range(NUM_EPOCHS):
         model, best_loss, early_stopped = train_loop(train_loader, model, criterion, optimizer, epoch, writer, device, early_stop)
-        evaluate(test_loader, model, criterion, writer, device, test_data.labels)
+        evaluate(test_loader, model, criterion, writer, device, list(set(test_data.labels)))
 
         if early_stopped:
             print("Broke early")
