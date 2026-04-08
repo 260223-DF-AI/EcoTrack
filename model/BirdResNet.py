@@ -1,5 +1,4 @@
 import os
-import sys
 import time
 import ssl
 import math
@@ -15,12 +14,11 @@ import torchvision.models as models
 
 from PIL import Image
 
-from warnings import deprecated
-
 # Global Variables
 DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
-MODEL_PATH = "model/weights/birds.pth"
+MODEL_PATH = "model/weights/model.pth"
+BEST_MODEL_PATH = "model/weights/best.pth"
 NUM_EPOCHS = 5
 LEARNING_RATE = 0.01
 PATIENCE = 2
@@ -38,8 +36,8 @@ class BirdResNet(nn.Module):
 
         # Transfer Learning based on ResNet model
         # Options are 18, 34, 50, 101, and 151
-        self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+        # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
         # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
         # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
@@ -200,7 +198,7 @@ def load_model(model, optimizer, early_stop):
         # return model, optimizer, early_stop_train, early_stop_test
         return model, optimizer, early_stop
 
-def train_loop(dataloader, model, loss_fn, optimizer, writer, device):
+def train_loop(dataloader, model, loss_fn, best_loss, optimizer, writer, device):
     """
     Train for one epoch
     """
@@ -219,21 +217,16 @@ def train_loop(dataloader, model, loss_fn, optimizer, writer, device):
 
         writer.add_scalar("Loss/train", loss.item(), batch_idx)
         
-        """
-        should_stop, improved = early_stop(loss.item())
 
-        if improved: #leaving early stop in here for now but it should be initiated by eval first
-
-            print(f"New best model at batch {batch_idx}: Loss = {loss.item():.4f}")
+        if loss.item() < best_loss: #leaving early stop in here for now but it should be initiated by eval first
+            best_loss = loss.item()
+            print(f"New best training loss at batch {batch_idx}: Loss = {loss.item():.4f}")
 
             torch.save({
-                "epoch": epoch,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-                "loss": loss,
+                "loss": loss.item(),
             }, MODEL_PATH)
-
-        """
         
         if batch_idx % 10 == 0:
             print(f"Batch {batch_idx}")
@@ -245,7 +238,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, writer, device):
     print(f"Epoch completed: {batch_idx} batches processed")
     print(f"Time taken: {end_time - start_time:.2f} seconds")
     # return model, False
-    return model, optimizer
+    return model, optimizer, best_loss
 
 def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
     """
@@ -366,7 +359,7 @@ def main():
         lr=LEARNING_RATE
     )
     criterion = nn.CrossEntropyLoss()
-
+    best_loss = float('inf')
     early_stop = EarlyStopping(PATIENCE)
 
     print("--- Load Best Model ---")
@@ -378,18 +371,18 @@ def main():
     for epoch in range(1, NUM_EPOCHS+1):
         print()
         print(f"\n--- Training Epoch {epoch} ---")
-        model, optimizer = train_loop(train_loader, model, criterion, optimizer, writer, device)
+        model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, writer, device)
         
-        early_stopped, loss = evaluate(test_loader, model, criterion, writer, device, early_stop)
+        early_stopped, test_loss = evaluate(test_loader, model, criterion, writer, device, early_stop)
 
         if early_stopped:
-            print("Broke early, loading best weights for eval")
+            print("Broke early, saving best weights")
             torch.save({
                 "epoch": epoch,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
-                "loss": loss,
-            }, MODEL_PATH)
+                "loss": test_loss,
+            }, BEST_MODEL_PATH)
             break
 
     validate(valid_loader, model, criterion, writer, device)
