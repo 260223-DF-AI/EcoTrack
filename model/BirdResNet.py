@@ -20,40 +20,12 @@ DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/birds.pth"
 NUM_EPOCHS = 5
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.01
 PATIENCE = 100
+BATCH_SIZE = 32
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
-
-@deprecated("Model trains from scratch, use BirdResNet class instead for fine-tuning ResNet model")
-class BirdModel(nn.Module):
-    """
-    ignore this class for now, finetuning RESNET model seems to be loading a model definied for us
-    Keeping for the moment in case we end up training from scratch for whatever reason. 
-    """
-    def __init__(self, num_classes: int = 200):
-        """
-        
-        """
-        super(BirdResNet, self).__init__()
-
-        self.layers = nn.Sequential(
-            nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Linear(in_features=32, out_features=num_classes)
-        )
-
-    def forward(self, x):
-        """
-        Forward pass of data through our sequential layers
-        """
-        return self.layers(x)
-    
 
 class BirdResNet(nn.Module):
     """
@@ -64,9 +36,9 @@ class BirdResNet(nn.Module):
 
         # Transfer Learning based on ResNet model
         # Options are 18, 34, 50, 101, and 151
-        # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
         # self.model = models.resnet151(weights=models.ResNet151_Weights.DEFAULT)
 
@@ -117,7 +89,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch, best_loss, writer, 
 
     for batch_idx, (x, y) in enumerate(dataloader, 1):
         x, y = x.to(device), y.to(device)
-        print(x.device)
+        # print(x.device)
         pred = model(x)
         loss = loss_fn(pred, y)
         optimizer.zero_grad()
@@ -223,8 +195,8 @@ def load_data():
     # valid_data = BirdDataset(valid_paths, valid_labels, transform=transform)
 
     # Create dataloaders
-    train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
-    test_loader = DataLoader(test_data, batch_size=32, shuffle=False)
+    train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
+    test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
     # valid_loader = DataLoader(valid_data, batch_size=32, shuffle=False)
     
     return train_data, test_data, train_loader, test_loader
