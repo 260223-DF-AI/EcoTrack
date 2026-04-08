@@ -40,16 +40,22 @@ class BirdResNet(nn.Module):
         # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
         # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
-        # self.model = models.resnet151(weights=models.ResNet151_Weights.DEFAULT)
+        # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
         # Freeze ResNet params
         for param in self.model.parameters():
             param.requires_grad = False
 
+        self.model.layer4
+
         # Replace final fully-connected linear layer with our own to fine-tune
         # Allows us to set our number of output classes
         num_ftrs = self.model.fc.in_features
         self.model.fc = nn.Linear(num_ftrs, num_classes)
+        
+        for name, param in self.model.named_parameters():
+            if "layer4" in name or "fc" in name:
+                param.requires_grad = True
 
     def forward(self, x):
         return self.model(x)
@@ -77,7 +83,7 @@ class BirdDataset(Dataset):
         
         return image, label
 
-def train_loop(dataloader, model, loss_fn, optimizer, epoch, best_loss, writer, device, early_stop):
+def train_loop(dataloader, model, loss_fn, optimizer, epoch, writer, device, early_stop):
     """
     Train for one epoch
     """
@@ -111,16 +117,16 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch, best_loss, writer, 
                 "loss": loss,
             }, MODEL_PATH)
 
-        if batch_idx % 100 == 0:
-            print(f"Batch {batch_idx}: Loss = {loss.item():>7f}")
+        if batch_idx % 10 == 0:
+            print(f"Batch {batch_idx}")
 
         if should_stop:
-            return model, early_stop.best_loss, True
+            return model, True
     
     end_time = time.time()
     print(f"Epoch {epoch + 1} completed: {batch_idx} batches processed")
     print(f"Time taken: {end_time - start_time:.2f} seconds")
-    return model, early_stop.best_loss, False
+    return model, False
 
 def evaluate(dataloader, model, loss_fn, writer, device):
     """
@@ -197,7 +203,7 @@ def load_data():
     # Create dataloaders
     train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
     test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
-    # valid_loader = DataLoader(valid_data, batch_size=32, shuffle=False)
+    # valid_loader = DataLoader(valid_data, batch_size=BATCH_SIZE, shuffle=False)
     
     return train_data, test_data, train_loader, test_loader
 
@@ -219,9 +225,22 @@ class EarlyStopping:
                 self.early_stop = True
             return self.early_stop, False
 
+def load_model(model, optimizer, early_stop):
+        """
+        Load best model weights, optimizer state dict, and loss
+        """
+        best_model = torch.load(MODEL_PATH, weights_only=True)
+        model.load_state_dict(best_model["model_state_dict"])
+        optimizer.load_state_dict(best_model["optimizer_state_dict"])
+        early_stop.best_loss = best_model["loss"]
+        print(f"Loaded best model from {MODEL_PATH}")
+        return model, optimizer, early_stop
+
+
 def main():
 
     # Identify best device to train on
+    print(f"Cuda available: {torch.cuda.is_available()}")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # cuda:0?
     if(torch.backends.mps.is_available()):
         device = torch.device('mps')
@@ -263,7 +282,6 @@ def main():
     print("--- Instantiate Model ---")
     model = BirdResNet(len(train_data))
     model = model.to(device)
-    best_loss = float("inf")
 
     optimizer = optim.Adam(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -275,18 +293,17 @@ def main():
 
     print("--- Load Best Model ---")
     if os.path.exists(MODEL_PATH):
-        best_model = torch.load(MODEL_PATH, weights_only=True)
-        model.load_state_dict(best_model["model_state_dict"])
-        optimizer.load_state_dict(best_model["optimizer_state_dict"])
-        best_loss = best_model["loss"]
-        print(f"Loaded best model from {MODEL_PATH}")
+        model, optimizer, early_stop = load_model(model, optimizer, early_stop)
 
     for epoch in range(NUM_EPOCHS):
-        model, best_loss, early_stopped = train_loop(train_loader, model, criterion, optimizer, epoch, best_loss, writer, device, early_stop)
+        model, early_stopped = train_loop(train_loader, model, criterion, optimizer, epoch, writer, device, early_stop)
+        if early_stopped:
+            print("Broke early, loading best weights for eval")
+            model, optimizer, early_stop = load_model(model, optimizer, early_stop)
+        
         evaluate(test_loader, model, criterion, writer, device)
 
         if early_stopped:
-            print("Broke early")
             break
 
 if __name__ == "__main__":

@@ -47,6 +47,7 @@ Fine-tuning a torchvision ResNet model to classify bird images among 200 classes
 - [Graph-of-Thought Prompting](https://wandb.ai/sauravmaheshkar/prompting-techniques/reports/Chain-of-thought-tree-of-thought-and-graph-of-thought-Prompting-techniques-explained---Vmlldzo4MzQwNjMx)
 - [ResNet Example 1](https://medium.com/@anglilian/image-classification-with-resnet-pytorch-1e48a4c33905)
 - [ResNet Example 2](https://medium.com/@engr.akhtar.awan/how-to-fine-tune-the-resnet-50-model-on-your-target-dataset-using-pytorch-187abdb9beeb)
+- [Transfer learning and unfreezing layers](https://www.tensorflow.org/tutorials/images/transfer_learning)
 
 
 # Requirements
