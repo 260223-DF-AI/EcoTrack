@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import ssl
+import math
 
 import torch
 import torch.nn as nn
@@ -46,8 +47,6 @@ class BirdResNet(nn.Module):
         for param in self.model.parameters():
             param.requires_grad = False
 
-        self.model.layer4
-
         # Replace final fully-connected linear layer with our own to fine-tune
         # Allows us to set our number of output classes
         num_ftrs = self.model.fc.in_features
@@ -68,6 +67,7 @@ class BirdDataset(Dataset):
         self.image_paths = image_paths
         self.labels = labels
         self.transform = transform
+        self.classes = len(set(labels))
 
     def __len__(self):
         return len(self.image_paths)
@@ -83,76 +83,23 @@ class BirdDataset(Dataset):
         
         return image, label
 
-def train_loop(dataloader, model, loss_fn, optimizer, epoch, writer, device, early_stop):
-    """
-    Train for one epoch
-    """
-    print()
-    print(f"\n--- Training Epoch {epoch+1} ---")
+class EarlyStopping:
+    def __init__(self, patience: int = 20):
+        self.patience = patience
+        self.best_loss = float("inf")
+        self.counter = 0 # number of batches w/o improvement
+        self.early_stop = False
 
-    model.train()
-    start_time = time.time()
-
-    for batch_idx, (x, y) in enumerate(dataloader, 1):
-        x, y = x.to(device), y.to(device)
-        # print(x.device)
-        pred = model(x)
-        loss = loss_fn(pred, y)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        writer.add_scalar("Loss/train", loss.item(), batch_idx)
-        
-        should_stop, improved = early_stop(loss.item())
-
-        if improved:
-
-            print(f"New best model at batch {batch_idx}: Loss = {loss.item():.4f}")
-
-            torch.save({
-                "epoch": epoch,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "loss": loss,
-            }, MODEL_PATH)
-
-        if batch_idx % 10 == 0:
-            print(f"Batch {batch_idx}")
-
-        if should_stop:
-            return model, True
-    
-    end_time = time.time()
-    print(f"Epoch {epoch + 1} completed: {batch_idx} batches processed")
-    print(f"Time taken: {end_time - start_time:.2f} seconds")
-    return model, False
-
-def evaluate(dataloader, model, loss_fn, writer, device):
-    """
-    Evaluate after one epoch
-    """
-    print()
-    print("--- Eval Model ---")
-
-    test_loss, correct, total = 0, 0, 0
-
-    model.eval()
-
-    with torch.no_grad():
-        for batch_idx, (x, y) in enumerate(dataloader, 1):
-            x, y = x.to(device), y.to(device)
-            pred = model(x)
-            total += len(y)
-            test_loss += loss_fn(pred, y).item()
-            correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
-            if batch_idx == 10: break
-        
-    writer.add_scalar("Loss/test", test_loss / total)
-    print("Total Samples: ", total)
-    print("Correct Predictions: ", correct)
-    print(f"Test Loss: {test_loss / total:.4f}")
-    print(f"Evaluation: Accuracy = {(100 * correct / total):.2f}%")
+    def __call__(self, loss: float):
+        if loss < self.best_loss:
+            self.best_loss = loss
+            self.counter = 0
+            return False, True
+        else:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+            return self.early_stop, False
 
 def load_data():
     """
@@ -173,7 +120,7 @@ def load_data():
     with open("./data/CUB_200_2011/images.txt", 'r', encoding='utf-8') as f:
         for idx, line in enumerate(f):
             _, path = line.split()
-            label = int(path[:3])
+            label = int(path[:3]) - 1
             if train_test_image_map[idx] == 1:
                 train_labels.append(label)
                 train_paths.append(path)
@@ -182,7 +129,7 @@ def load_data():
                 test_paths.append(path)
                 
     # Standardize our image sizes for the model, while applying random transformations to strengthen model accuracy
-    transform = transforms.Compose([
+    train_transform = transforms.Compose([
         transforms.Resize((256, 256)),
         transforms.RandomHorizontalFlip(p=0.3),
         transforms.RandomVerticalFlip(p=0.3),
@@ -195,36 +142,32 @@ def load_data():
         )
     ])
 
+    test_transform = transforms.Compose([
+        transforms.Resize((256, 256)),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize( #these are provided hardcoded values
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        ) 
+    ])
+
     # Create dataset objects
-    train_data = BirdDataset(train_paths, train_labels, transform=transform)
-    test_data = BirdDataset(test_paths, test_labels, transform=transform)
+    train_data = BirdDataset(train_paths, train_labels, transform=train_transform)
+    test_data = BirdDataset(test_paths, test_labels, transform=test_transform)
     # valid_data = BirdDataset(valid_paths, valid_labels, transform=transform)
 
     # Create dataloaders
     train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
-    test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False)
+    test_loader = DataLoader(test_data, batch_size=len(test_data), shuffle=False) #batch size won't matter if running through all data
     # valid_loader = DataLoader(valid_data, batch_size=BATCH_SIZE, shuffle=False)
+
+    # print(f"Train data count: {len(train_data)}; Classes: {train_data.classes}")
+    # print(f"Test data count: {len(test_data)}; Classes: {test_data.classes}")
     
-    return train_data, test_data, train_loader, test_loader
+    return train_data, train_loader, test_loader
 
-class EarlyStopping:
-    def __init__(self, patience: int = 20):
-        self.patience = patience
-        self.best_loss = float("inf")
-        self.counter = 0 # number of batches w/o improvement
-        self.early_stop = False
-
-    def __call__(self, loss: float):
-        if loss < self.best_loss:
-            self.best_loss = loss
-            self.counter = 0
-            return False, True
-        else:
-            self.counter += 1
-            if self.counter >= self.patience:
-                self.early_stop = True
-            return self.early_stop, False
-
+# def load_model(model, optimizer, early_stop_train, early_stop_test):
 def load_model(model, optimizer, early_stop):
         """
         Load best model weights, optimizer state dict, and loss
@@ -233,8 +176,95 @@ def load_model(model, optimizer, early_stop):
         model.load_state_dict(best_model["model_state_dict"])
         optimizer.load_state_dict(best_model["optimizer_state_dict"])
         early_stop.best_loss = best_model["loss"]
+        # early_stop_train.best_loss = best_model["train_loss"]
+        # early_stop_test.best_loss = best_model["test_loss"]
         print(f"Loaded best model from {MODEL_PATH}")
+        # return model, optimizer, early_stop_train, early_stop_test
         return model, optimizer, early_stop
+
+# def train_loop(dataloader, model, loss_fn, optimizer, epoch, writer, device, early_stop):
+def train_loop(dataloader, model, loss_fn, optimizer, writer, device):
+    """
+    Train for one epoch
+    """
+
+    model.train()
+    start_time = time.time()
+
+    for batch_idx, (x, y) in enumerate(dataloader, 1):
+        x, y = x.to(device), y.to(device)
+        # print(x.device)
+        pred = model(x)
+        loss = loss_fn(pred, y)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        writer.add_scalar("Loss/train", loss.item(), batch_idx)
+        
+        """
+        should_stop, improved = early_stop(loss.item())
+
+        if improved: #leaving early stop in here for now but it should be initiated by eval first
+
+            print(f"New best model at batch {batch_idx}: Loss = {loss.item():.4f}")
+
+            torch.save({
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "loss": loss,
+            }, MODEL_PATH)
+
+        """
+        
+        if batch_idx % 10 == 0:
+            print(f"Batch {batch_idx}")
+
+        # if should_stop:
+            # return model, True
+    
+    end_time = time.time()
+    print(f"Epoch completed: {batch_idx} batches processed")
+    print(f"Time taken: {end_time - start_time:.2f} seconds")
+    # return model, False
+    return model, optimizer
+
+def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
+    """
+    Evaluate after one epoch
+    """
+    print()
+    print("--- Eval Model ---")
+
+    test_loss, correct, total = 0, 0, 0
+
+    model.eval()
+
+    with torch.no_grad():
+        for batch_idx, (x, y) in enumerate(dataloader, 1):
+            x, y = x.to(device), y.to(device)
+            pred = model(x)
+            total += len(y)
+            test_loss += loss_fn(pred, y).item()
+            correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
+            # if batch_idx == 100:
+                # print(f"Batch {batch_idx}")
+    
+    test_loss /= total
+
+    should_stop, improved = early_stop(test_loss)
+
+    if improved: #leaving early stop in here for now but it should be initiated by eval first
+        print(f"New best model: Loss = {test_loss:.4f}")
+        
+    writer.add_scalar("Loss/test", test_loss)
+    print("Total Samples: ", total)
+    print("Correct Predictions: ", correct)
+    print(f"Test Loss: {test_loss:.4f}")
+    print(f"Evaluation: Accuracy = {(100 * correct / total):.2f}%")
+
+    return should_stop, test_loss
 
 
 def main():
@@ -251,7 +281,7 @@ def main():
 
     print()
     print("--- Create DataLoaders ---")
-    train_data, test_data, train_loader, test_loader = load_data()
+    test_data, train_loader, test_loader = load_data()
 
     # Test to make sure dataloaders working
     """
@@ -280,7 +310,7 @@ def main():
 
     print()
     print("--- Instantiate Model ---")
-    model = BirdResNet(len(train_data))
+    model = BirdResNet(test_data.classes)
     model = model.to(device)
 
     optimizer = optim.Adam(
@@ -289,21 +319,31 @@ def main():
     )
     criterion = nn.CrossEntropyLoss()
 
+    # early_stop_train = EarlyStopping(PATIENCE)
+    # early_stop_test = EarlyStopping(PATIENCE)
     early_stop = EarlyStopping(PATIENCE)
 
     print("--- Load Best Model ---")
     if os.path.exists(MODEL_PATH):
         model, optimizer, early_stop = load_model(model, optimizer, early_stop)
 
-    for epoch in range(NUM_EPOCHS):
-        model, early_stopped = train_loop(train_loader, model, criterion, optimizer, epoch, writer, device, early_stop)
-        if early_stopped:
-            print("Broke early, loading best weights for eval")
-            model, optimizer, early_stop = load_model(model, optimizer, early_stop)
+    print(f"Batches per epoch: {math.ceil(len(test_data) / BATCH_SIZE)}")
+
+    for epoch in range(1, NUM_EPOCHS+1):
+        print()
+        print(f"\n--- Training Epoch {epoch} ---")
+        model, optimizer = train_loop(train_loader, model, criterion, optimizer, writer, device)
         
-        evaluate(test_loader, model, criterion, writer, device)
+        early_stopped, loss = evaluate(test_loader, model, criterion, writer, device, early_stop)
 
         if early_stopped:
+            print("Broke early, loading best weights for eval")
+            torch.save({
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "loss": loss,
+            }, MODEL_PATH)
             break
 
 if __name__ == "__main__":
