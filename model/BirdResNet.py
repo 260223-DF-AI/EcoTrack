@@ -3,6 +3,7 @@ import sys
 import time
 import ssl
 import math
+import random
 
 import torch
 import torch.nn as nn
@@ -22,8 +23,8 @@ LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/birds.pth"
 NUM_EPOCHS = 5
 LEARNING_RATE = 0.01
-PATIENCE = 100
-BATCH_SIZE = 32
+PATIENCE = 2
+BATCH_SIZE = 128
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -106,27 +107,40 @@ def load_data():
     Create our train and test dataloaders
     """
     # Set up train and test datasets and dataloaders
-    train_test_image_map = []
+    # train_test_image_map = []
+    train_paths, train_labels = [], []
+    test_paths, test_labels = [], []
+    valid_paths, valid_labels = [], []
 
-    train_paths = []
-    train_labels = []
-    test_paths = []
-    test_labels = []
-
-    with open("./data/CUB_200_2011/train_test_split.txt", 'r', encoding='utf-8') as f:
-        for line in f:
-            train_test_image_map.append(int(line.replace('\n', '').split()[-1]))
-
+    # Read all images and group by folder/class
+    class_images = {}
     with open("./data/CUB_200_2011/images.txt", 'r', encoding='utf-8') as f:
-        for idx, line in enumerate(f):
-            _, path = line.split()
-            label = int(path[:3]) - 1
-            if train_test_image_map[idx] == 1:
-                train_labels.append(label)
-                train_paths.append(path)
-            else:
-                test_labels.append(label)
-                test_paths.append(path)
+        for line in f:
+            _, path = line.replace('\n', '').split()
+            folder = path.split('/')[0]
+            label = int(folder[:3]) - 1
+            
+            if label not in class_images:
+                class_images[label] = []
+            class_images[label].append(path)
+    
+    # Split each class 80/10/10
+    for label in sorted(class_images.keys()):
+        paths = class_images[label]
+        random.shuffle(paths)
+        
+        train_count = math.ceil(len(paths) * 0.8)
+        test_count = math.ceil(len(paths) * 0.1)
+        
+        train_paths.extend(paths[:train_count])
+        train_labels.extend([label] * train_count)
+        
+        test_paths.extend(paths[train_count:train_count + test_count])
+        test_labels.extend([label] * test_count)
+        
+        valid_paths.extend(paths[train_count + test_count:])
+        valid_labels.extend([label] * (len(paths) - train_count - test_count))
+
                 
     # Standardize our image sizes for the model, while applying random transformations to strengthen model accuracy
     train_transform = transforms.Compose([
@@ -142,7 +156,7 @@ def load_data():
         )
     ])
 
-    test_transform = transforms.Compose([
+    std_transform = transforms.Compose([
         transforms.Resize((256, 256)),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
@@ -152,22 +166,26 @@ def load_data():
         ) 
     ])
 
+    print(f"Train data size: {len(train_paths)}, {len(train_labels)}")
+    print(f"Test data size: {len(test_paths)}, {len(test_labels)}")
+    print(f"Valid data size: {len(valid_paths)}, {len(valid_labels)}")
+
     # Create dataset objects
     train_data = BirdDataset(train_paths, train_labels, transform=train_transform)
-    test_data = BirdDataset(test_paths, test_labels, transform=test_transform)
-    # valid_data = BirdDataset(valid_paths, valid_labels, transform=transform)
+    test_data = BirdDataset(test_paths, test_labels, transform=std_transform)
+    valid_data = BirdDataset(valid_paths, valid_labels, transform=std_transform)
 
     # Create dataloaders
     train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
     test_loader = DataLoader(test_data, batch_size=len(test_data), shuffle=False) #batch size won't matter if running through all data
-    # valid_loader = DataLoader(valid_data, batch_size=BATCH_SIZE, shuffle=False)
+    valid_loader = DataLoader(valid_data, batch_size=len(valid_data), shuffle=False)
 
-    # print(f"Train data count: {len(train_data)}; Classes: {train_data.classes}")
-    # print(f"Test data count: {len(test_data)}; Classes: {test_data.classes}")
+    print(f"Train data count: {len(train_data)}; Classes: {train_data.classes}")
+    print(f"Test data count: {len(test_data)}; Classes: {test_data.classes}")
+    print(f"Valid data count: {len(valid_data)}; Classes: {valid_data.classes}")
     
-    return train_data, train_loader, test_loader
+    return train_data, train_loader, test_loader, valid_loader
 
-# def load_model(model, optimizer, early_stop_train, early_stop_test):
 def load_model(model, optimizer, early_stop):
         """
         Load best model weights, optimizer state dict, and loss
@@ -182,7 +200,6 @@ def load_model(model, optimizer, early_stop):
         # return model, optimizer, early_stop_train, early_stop_test
         return model, optimizer, early_stop
 
-# def train_loop(dataloader, model, loss_fn, optimizer, epoch, writer, device, early_stop):
 def train_loop(dataloader, model, loss_fn, optimizer, writer, device):
     """
     Train for one epoch
@@ -245,8 +262,9 @@ def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
         for batch_idx, (x, y) in enumerate(dataloader, 1):
             x, y = x.to(device), y.to(device)
             pred = model(x)
-            total += len(y)
-            test_loss += loss_fn(pred, y).item()
+            batch_size = y.size(0)
+            total += batch_size
+            test_loss += loss_fn(pred, y).item() * batch_size
             correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
             # if batch_idx == 100:
                 # print(f"Batch {batch_idx}")
@@ -266,6 +284,35 @@ def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
 
     return should_stop, test_loss
 
+def validate(dataloader, model, loss_fn, writer, device):
+    """
+    Evaluate after one epoch
+    """
+    print()
+    print("--- Final Validation ---")
+
+    valid_loss, correct, total = 0, 0, 0
+
+    model.eval()
+
+    with torch.no_grad():
+        for batch_idx, (x, y) in enumerate(dataloader, 1):
+            x, y = x.to(device), y.to(device)
+            pred = model(x)
+            batch_size = y.size(0)
+            total += batch_size
+            valid_loss += loss_fn(pred, y).item() * batch_size
+            correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
+            # if batch_idx == 100:
+                # print(f"Batch {batch_idx}")
+    
+    valid_loss /= total
+    
+    writer.add_scalar("Loss/valid", valid_loss)
+    print("Total Samples: ", total)
+    print("Correct Predictions: ", correct)
+    print(f"Valid Loss: {valid_loss:.4f}")
+    print(f"Validation: Accuracy = {(100 * correct / total):.2f}%")
 
 def main():
 
@@ -281,9 +328,10 @@ def main():
 
     print()
     print("--- Create DataLoaders ---")
-    test_data, train_loader, test_loader = load_data()
+    train_data, train_loader, test_loader, valid_loader = load_data()
 
     # Test to make sure dataloaders working
+    
     """
     # Random training example
     rand_idx = torch.randint(0, len(train_data), (1,)).item()
@@ -310,7 +358,7 @@ def main():
 
     print()
     print("--- Instantiate Model ---")
-    model = BirdResNet(test_data.classes)
+    model = BirdResNet(train_data.classes)
     model = model.to(device)
 
     optimizer = optim.Adam(
@@ -319,15 +367,13 @@ def main():
     )
     criterion = nn.CrossEntropyLoss()
 
-    # early_stop_train = EarlyStopping(PATIENCE)
-    # early_stop_test = EarlyStopping(PATIENCE)
     early_stop = EarlyStopping(PATIENCE)
 
     print("--- Load Best Model ---")
     if os.path.exists(MODEL_PATH):
         model, optimizer, early_stop = load_model(model, optimizer, early_stop)
 
-    print(f"Batches per epoch: {math.ceil(len(test_data) / BATCH_SIZE)}")
+    print(f"Batches per epoch: {math.ceil(len(train_data) / BATCH_SIZE)}")
 
     for epoch in range(1, NUM_EPOCHS+1):
         print()
@@ -345,6 +391,8 @@ def main():
                 "loss": loss,
             }, MODEL_PATH)
             break
+
+    validate(valid_loader, model, criterion, writer, device)
 
 if __name__ == "__main__":
     main()
