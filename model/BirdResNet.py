@@ -164,10 +164,6 @@ def load_data():
         ) 
     ])
 
-    print(f"Train data size: {len(train_paths)}, {len(train_labels)}")
-    print(f"Test data size: {len(test_paths)}, {len(test_labels)}")
-    print(f"Valid data size: {len(valid_paths)}, {len(valid_labels)}")
-
     # Create dataset objects
     train_data = BirdDataset(train_paths, train_labels, transform=train_transform)
     test_data = BirdDataset(test_paths, test_labels, transform=std_transform)
@@ -175,8 +171,8 @@ def load_data():
 
     # Create dataloaders
     train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
-    test_loader = DataLoader(test_data, batch_size=len(test_data), shuffle=False) #batch size won't matter if running through all data
-    valid_loader = DataLoader(valid_data, batch_size=len(valid_data), shuffle=False)
+    test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False) #batch size won't matter if running through all data
+    valid_loader = DataLoader(valid_data, batch_size=BATCH_SIZE, shuffle=False)
 
     print(f"Train data count: {len(train_data)}; Classes: {train_data.classes}")
     print(f"Test data count: {len(test_data)}; Classes: {test_data.classes}")
@@ -363,7 +359,7 @@ def main():
     early_stop = EarlyStopping(PATIENCE)
 
     print("--- Load Best Model ---")
-    if os.path.exists(MODEL_PATH):
+    if os.path.exists(BEST_MODEL_PATH):
         model, optimizer, early_stop = load_model(model, optimizer, early_stop)
 
     print(f"Batches per epoch: {math.ceil(len(train_data) / BATCH_SIZE)}")
