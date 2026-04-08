@@ -19,8 +19,8 @@ from warnings import deprecated
 DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/birds.pth"
-NUM_EPOCHS = 5
-LEARNING_RATE = 0.001
+NUM_EPOCHS = 100
+LEARNING_RATE = 0.0001
 PATIENCE = 100
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -66,13 +66,17 @@ class BirdResNet(nn.Module):
         # Options are 18, 34, 50, 101, and 151
         # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
-        # self.model = models.resnet151(weights=models.ResNet151_Weights.DEFAULT)
+        # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
+        # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
         # Freeze ResNet params
         for param in self.model.parameters():
             param.requires_grad = False
+        for param in self.model.layer4.parameters():
+            param.requires_grad = True
+        # for param in self.model.layer3.parameters():
+        #     param.requires_grad = True
 
         # Replace final fully-connected linear layer with our own to fine-tune
         # Allows us to set our number of output classes
@@ -105,7 +109,7 @@ class BirdDataset(Dataset):
         
         return image, label
 
-def train_loop(dataloader, model, loss_fn, optimizer, epoch, best_loss, writer, device, early_stop):
+def train_loop(dataloader, model, loss_fn, optimizer, epoch, scheduler, writer, device, early_stop):
     """
     Train for one epoch
     """
@@ -117,12 +121,12 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch, best_loss, writer, 
 
     for batch_idx, (x, y) in enumerate(dataloader, 1):
         x, y = x.to(device), y.to(device)
-        print(x.device)
         pred = model(x)
         loss = loss_fn(pred, y)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        #scheduler.step(loss.item())
 
         writer.add_scalar("Loss/train", loss.item(), batch_idx)
         
@@ -297,6 +301,7 @@ def main():
         filter(lambda p: p.requires_grad, model.parameters()),
         lr=LEARNING_RATE
     )
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode='min', patience=25)
     criterion = nn.CrossEntropyLoss()
 
     early_stop = EarlyStopping(PATIENCE)
@@ -310,7 +315,7 @@ def main():
         print(f"Loaded best model from {MODEL_PATH}")
 
     for epoch in range(NUM_EPOCHS):
-        model, best_loss, early_stopped = train_loop(train_loader, model, criterion, optimizer, epoch, best_loss, writer, device, early_stop)
+        model, best_loss, early_stopped = train_loop(train_loader, model, criterion, optimizer, epoch, scheduler, writer, device, early_stop)
         evaluate(test_loader, model, criterion, writer, device)
 
         if early_stopped:
