@@ -10,6 +10,11 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter # tensorboard --logdir=./runs/bird_logs
 from torchvision import transforms
 import torchvision.models as models
+from sklearn.metrics import confusion_matrix
+import seaborn as sn
+import pandas as pd
+import numpy as np
+import matplotlib as plt
 
 from PIL import Image
 
@@ -21,7 +26,7 @@ LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/birds.pth"
 NUM_EPOCHS = 20
 LEARNING_RATE = 0.001
-PATIENCE = 100
+PATIENCE = 90
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -78,8 +83,6 @@ class BirdResNet(nn.Module):
         # for param in self.model.layer3.parameters():
         #     param.requires_grad = True
 
-        self.layer4 = self.model.layer4
-
         # Replace final fully-connected linear layer with our own to fine-tune
         # Allows us to set our number of output classes
         num_ftrs = self.model.fc.in_features
@@ -112,7 +115,7 @@ class BirdDataset(Dataset):
         
         return image, label
 
-def train_loop(dataloader, model, loss_fn, optimizer, epoch, scheduler, writer, device, early_stop):
+def train_loop(dataloader, model, loss_fn, optimizer, epoch, writer, device, early_stop):
     """
     Train for one epoch
     """
@@ -129,7 +132,6 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch, scheduler, writer, 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        #scheduler.step(loss.item())
 
         writer.add_scalar("Loss/train", loss.item(), batch_idx)
         
@@ -157,12 +159,18 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch, scheduler, writer, 
     print(f"Time taken: {end_time - start_time:.2f} seconds")
     return model, early_stop.best_loss, False
 
-def evaluate(dataloader, model, loss_fn, writer, device):
+def evaluate(dataloader: DataLoader, model, loss_fn, writer, device, classes):
     """
     Evaluate after one epoch
     """
     print()
     print("--- Eval Model ---")
+
+    correct_pred = {classname: 0 for classname in classes}
+    total_pred = {classname: 0 for classname in classes}
+
+    all_y_pred = []
+    all_y_true = []
 
     test_loss, correct, total = 0, 0, 0
 
@@ -172,10 +180,26 @@ def evaluate(dataloader, model, loss_fn, writer, device):
         for batch_idx, (x, y) in enumerate(dataloader, 1):
             x, y = x.to(device), y.to(device)
             pred = model(x)
+            _, predictions = torch.max(pred, 1)
             total += len(y)
             test_loss += loss_fn(pred, y).item()
             correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
+
+            all_y_pred.extend(predictions)
+            all_y_true.extend(y)
+            for label, prediction in zip(y, predictions):
+                if label == prediction:
+                    correct_pred[classes[label]] += 1
+            total_pred[classes[label]] += 1
             if batch_idx == 10: break
+    cf_matrix = confusion_matrix([torch.Tensor.cpu(elem) for elem in all_y_true], [torch.Tensor.cpu(elem) for elem in all_y_pred])
+    df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None], index = [i for i in classes],
+                        columns = [i for i in classes])
+    plt.figure(figsize = (8,5))
+    sn.heatmap(df_cm, annot=True)
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.savefig('bird_confusion_matrix.png')
         
     writer.add_scalar("Loss/test", test_loss / total)
     print("Total Samples: ", total)
@@ -296,21 +320,17 @@ def main():
 
     print()
     print("--- Instantiate Model ---")
-    model = BirdResNet(len(train_data))
+    model = BirdResNet(200)
     model = model.to(device)
     best_loss = float("inf")
 
     optimizer = optim.Adam([
-        {'params': filter(lambda p: p.requires_grad, model.layer4.parameters()),
+        {'params': filter(lambda p: p.requires_grad, model.model.layer4.parameters()),
         'lr': 1e-4},
         {'params': filter(lambda p: p.requires_grad, model.model.fc.parameters()),
         'lr': LEARNING_RATE}
     ], weight_decay=1e-4)
-    # optimizer = optim.Adam([ # claude used AdamW, but idk what that is
-    #     {"params": model.layer4.parameters(), "lr": 1e-4},
-    #     {"params": filter(lambda p: p.requires_grad, model.parameters()),     "lr": 1e-3},
-    # ], weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode='min', patience=7, threshold=0.00000001)
+
     criterion = nn.CrossEntropyLoss()
 
     early_stop = EarlyStopping(PATIENCE)
@@ -324,8 +344,8 @@ def main():
         print(f"Loaded best model from {MODEL_PATH}")
 
     for epoch in range(NUM_EPOCHS):
-        model, best_loss, early_stopped = train_loop(train_loader, model, criterion, optimizer, epoch, scheduler, writer, device, early_stop)
-        evaluate(test_loader, model, criterion, writer, device)
+        model, best_loss, early_stopped = train_loop(train_loader, model, criterion, optimizer, epoch, writer, device, early_stop)
+        evaluate(test_loader, model, criterion, writer, device, test_data.labels)
 
         if early_stopped:
             print("Broke early")
