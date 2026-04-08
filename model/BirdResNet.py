@@ -20,7 +20,7 @@ DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/birds.pth"
 NUM_EPOCHS = 20
-LEARNING_RATE = 0.01
+LEARNING_RATE = 0.001
 PATIENCE = 100
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -78,10 +78,13 @@ class BirdResNet(nn.Module):
         # for param in self.model.layer3.parameters():
         #     param.requires_grad = True
 
+        self.layer4 = self.model.layer4
+
         # Replace final fully-connected linear layer with our own to fine-tune
         # Allows us to set our number of output classes
         num_ftrs = self.model.fc.in_features
         self.model.fc = nn.Linear(num_ftrs, num_classes)
+        
 
     def forward(self, x):
         return self.model(x)
@@ -126,7 +129,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch, scheduler, writer, 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        scheduler.step(loss.item())
+        #scheduler.step(loss.item())
 
         writer.add_scalar("Loss/train", loss.item(), batch_idx)
         
@@ -297,11 +300,17 @@ def main():
     model = model.to(device)
     best_loss = float("inf")
 
-    optimizer = optim.Adam(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=LEARNING_RATE
-    )
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode='min', patience=25)
+    optimizer = optim.Adam([
+        {'params': filter(lambda p: p.requires_grad, model.layer4.parameters()),
+        'lr': 1e-4},
+        {'params': filter(lambda p: p.requires_grad, model.model.fc.parameters()),
+        'lr': LEARNING_RATE}
+    ], weight_decay=1e-4)
+    # optimizer = optim.Adam([ # claude used AdamW, but idk what that is
+    #     {"params": model.layer4.parameters(), "lr": 1e-4},
+    #     {"params": filter(lambda p: p.requires_grad, model.parameters()),     "lr": 1e-3},
+    # ], weight_decay=1e-4)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode='min', patience=7, threshold=0.00000001)
     criterion = nn.CrossEntropyLoss()
 
     early_stop = EarlyStopping(PATIENCE)
