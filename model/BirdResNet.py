@@ -19,8 +19,8 @@ from warnings import deprecated
 DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/birds.pth"
-NUM_EPOCHS = 100
-LEARNING_RATE = 0.0001
+NUM_EPOCHS = 20
+LEARNING_RATE = 0.01
 PATIENCE = 100
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -66,8 +66,8 @@ class BirdResNet(nn.Module):
         # Options are 18, 34, 50, 101, and 151
         # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
+        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
         # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
         # Freeze ResNet params
@@ -126,7 +126,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, epoch, scheduler, writer, 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        #scheduler.step(loss.item())
+        scheduler.step(loss.item())
 
         writer.add_scalar("Loss/train", loss.item(), batch_idx)
         
@@ -227,8 +227,8 @@ def load_data():
     # valid_data = BirdDataset(valid_paths, valid_labels, transform=transform)
 
     # Create dataloaders
-    train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
-    test_loader = DataLoader(test_data, batch_size=32, shuffle=False)
+    train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
+    test_loader = DataLoader(test_data, batch_size=64, shuffle=False)
     # valid_loader = DataLoader(valid_data, batch_size=32, shuffle=False)
     
     return train_data, test_data, train_loader, test_loader
