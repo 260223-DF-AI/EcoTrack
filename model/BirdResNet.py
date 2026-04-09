@@ -1,7 +1,8 @@
 import os
-import sys
 import time
 import ssl
+import math
+import random
 
 import torch
 import torch.nn as nn
@@ -14,51 +15,22 @@ from sklearn.metrics import confusion_matrix
 import seaborn as sn
 import pandas as pd
 import numpy as np
-import matplotlib as plt
-
+import matplotlib.pyplot as plt
 from PIL import Image
-
-from warnings import deprecated
+import io
 
 # Global Variables
 DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
-MODEL_PATH = "model/weights/birds.pth"
-NUM_EPOCHS = 20
-LEARNING_RATE = 0.001
-PATIENCE = 90
+MODEL_PATH = "model/weights/model.pth"
+BEST_MODEL_PATH = "model/weights/best.pth"
+NUM_EPOCHS = 10
+LEARNING_RATE = 0.01
+PATIENCE = 2
+BATCH_SIZE = 64
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
-
-@deprecated("Model trains from scratch, use BirdResNet class instead for fine-tuning ResNet model")
-class BirdModel(nn.Module):
-    """
-    ignore this class for now, finetuning RESNET model seems to be loading a model definied for us
-    Keeping for the moment in case we end up training from scratch for whatever reason. 
-    """
-    def __init__(self, num_classes: int = 200):
-        """
-        
-        """
-        super(BirdResNet, self).__init__()
-
-        self.layers = nn.Sequential(
-            nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.Linear(in_features=32, out_features=num_classes)
-        )
-
-    def forward(self, x):
-        """
-        Forward pass of data through our sequential layers
-        """
-        return self.layers(x)
-    
 
 class BirdResNet(nn.Module):
     """
@@ -71,8 +43,8 @@ class BirdResNet(nn.Module):
         # Options are 18, 34, 50, 101, and 151
         # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
+        # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
         # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
         # Freeze ResNet params
@@ -87,7 +59,6 @@ class BirdResNet(nn.Module):
         # Allows us to set our number of output classes
         num_ftrs = self.model.fc.in_features
         self.model.fc = nn.Linear(num_ftrs, num_classes)
-        
 
     def forward(self, x):
         return self.model(x)
@@ -100,6 +71,7 @@ class BirdDataset(Dataset):
         self.image_paths = image_paths
         self.labels = labels
         self.transform = transform
+        self.classes = len(set(labels))
 
     def __len__(self):
         return len(self.image_paths)
@@ -115,62 +87,12 @@ class BirdDataset(Dataset):
         
         return image, label
 
-def train_loop(dataloader, model, loss_fn, optimizer, epoch, writer, device, early_stop):
-    """
-    Train for one epoch
-    """
-    print()
-    print(f"\n--- Training Epoch {epoch+1} ---")
-
-    model.train()
-    start_time = time.time()
-
-    for batch_idx, (x, y) in enumerate(dataloader, 1):
-        x, y = x.to(device), y.to(device)
-        pred = model(x)
-        loss = loss_fn(pred, y)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        writer.add_scalar("Loss/train", loss.item(), batch_idx)
-        
-        should_stop, improved = early_stop(loss.item())
-
-        if improved:
-
-            print(f"New best model at batch {batch_idx}: Loss = {loss.item():.4f}")
-
-            torch.save({
-                "epoch": epoch,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "loss": loss,
-            }, MODEL_PATH)
-
-        if batch_idx % 100 == 0:
-            print(f"Batch {batch_idx}: Loss = {loss.item():>7f}")
-
-        if should_stop:
-            return model, early_stop.best_loss, True
-    
-    end_time = time.time()
-    print(f"Epoch {epoch + 1} completed: {batch_idx} batches processed")
-    print(f"Time taken: {end_time - start_time:.2f} seconds")
-    return model, early_stop.best_loss, False
-
-def evaluate(dataloader: DataLoader, model, loss_fn, writer, device, classes):
+def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
     """
     Evaluate after one epoch
     """
     print()
     print("--- Eval Model ---")
-
-    correct_pred = {classname: 0 for classname in classes}
-    total_pred = {classname: 0 for classname in classes}
-
-    all_y_pred = []
-    all_y_true = []
 
     test_loss, correct, total = 0, 0, 0
 
@@ -180,85 +102,25 @@ def evaluate(dataloader: DataLoader, model, loss_fn, writer, device, classes):
         for batch_idx, (x, y) in enumerate(dataloader, 1):
             x, y = x.to(device), y.to(device)
             pred = model(x)
-            _, predictions = torch.max(pred, 1)
-            total += len(y)
-            test_loss += loss_fn(pred, y).item()
+            batch_size = y.size(0)
+            total += batch_size
+            test_loss += loss_fn(pred, y).item() * batch_size
             correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
-
-            all_y_pred.extend(predictions)
-            all_y_true.extend(y)
-            for label, prediction in zip(y, predictions):
-                if label == prediction:
-                    correct_pred[classes[label]] += 1
-            total_pred[classes[label]] += 1
-            if batch_idx == 10: break
-    cf_matrix = confusion_matrix([torch.Tensor.cpu(elem) for elem in all_y_true], [torch.Tensor.cpu(elem) for elem in all_y_pred])
-    df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None], index = [i for i in classes],
-                        columns = [i for i in classes])
-    plt.figure(figsize = (8,5))
-    sn.heatmap(df_cm, annot=True)
-    plt.ylabel('True label')
-    plt.xlabel('Predicted label')
-    plt.savefig('bird_confusion_matrix.png')
         
-    writer.add_scalar("Loss/test", test_loss / total)
+    test_loss /= total
+
+    should_stop, improved = early_stop(test_loss)
+
+    if improved: #leaving early stop in here for now but it should be initiated by eval first
+        print(f"New best model: Loss = {test_loss:.4f}")
+        
+    writer.add_scalar("Loss/test", test_loss)
     print("Total Samples: ", total)
     print("Correct Predictions: ", correct)
-    print(f"Test Loss: {test_loss / total:.4f}")
+    print(f"Test Loss: {test_loss:.4f}")
     print(f"Evaluation: Accuracy = {(100 * correct / total):.2f}%")
 
-def load_data():
-    """
-    Create our train and test dataloaders
-    """
-    # Set up train and test datasets and dataloaders
-    train_test_image_map = []
-
-    train_paths = []
-    train_labels = []
-    test_paths = []
-    test_labels = []
-
-    with open("./data/CUB_200_2011/train_test_split.txt", 'r', encoding='utf-8') as f:
-        for line in f:
-            train_test_image_map.append(int(line.replace('\n', '').split()[-1]))
-
-    with open("./data/CUB_200_2011/images.txt", 'r', encoding='utf-8') as f:
-        for idx, line in enumerate(f):
-            _, path = line.split()
-            label = int(path[:3])
-            if train_test_image_map[idx] == 1:
-                train_labels.append(label)
-                train_paths.append(path)
-            else:
-                test_labels.append(label)
-                test_paths.append(path)
-                
-    # Standardize our image sizes for the model, while applying random transformations to strengthen model accuracy
-    transform = transforms.Compose([
-        transforms.Resize((256, 256)),
-        transforms.RandomHorizontalFlip(p=0.3),
-        transforms.RandomVerticalFlip(p=0.3),
-        transforms.RandomRotation(45),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize( #these are provided hardcoded values
-            mean=[0.485, 0.456, 0.406],
-            std=[0.229, 0.224, 0.225]
-        )
-    ])
-
-    # Create dataset objects
-    train_data = BirdDataset(train_paths, train_labels, transform=transform)
-    test_data = BirdDataset(test_paths, test_labels, transform=transform)
-    # valid_data = BirdDataset(valid_paths, valid_labels, transform=transform)
-
-    # Create dataloaders
-    train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
-    test_loader = DataLoader(test_data, batch_size=64, shuffle=False)
-    # valid_loader = DataLoader(valid_data, batch_size=32, shuffle=False)
-    
-    return train_data, test_data, train_loader, test_loader
+    return should_stop, test_loss
 
 class EarlyStopping:
     def __init__(self, patience: int = 20):
@@ -278,9 +140,201 @@ class EarlyStopping:
                 self.early_stop = True
             return self.early_stop, False
 
+def load_data():
+    """
+    Create our train and test dataloaders
+    """
+    # Set up train and test datasets and dataloaders
+    # train_test_image_map = []
+    train_paths, train_labels = [], []
+    test_paths, test_labels = [], []
+    valid_paths, valid_labels = [], []
+
+    # Read all images and group by folder/class
+    class_images = {}
+    with open("./data/CUB_200_2011/images.txt", 'r', encoding='utf-8') as f:
+        for line in f:
+            _, path = line.replace('\n', '').split()
+            folder = path.split('/')[0]
+            label = int(folder[:3]) - 1
+            
+            if label not in class_images:
+                class_images[label] = []
+            class_images[label].append(path)
+    
+    # Split each class 80/10/10
+    for label in sorted(class_images.keys()):
+        paths = class_images[label]
+        random.shuffle(paths)
+        
+        train_count = math.ceil(len(paths) * 0.8)
+        test_count = math.ceil(len(paths) * 0.1)
+        
+        train_paths.extend(paths[:train_count])
+        train_labels.extend([label] * train_count)
+        
+        test_paths.extend(paths[train_count:train_count + test_count])
+        test_labels.extend([label] * test_count)
+        
+        valid_paths.extend(paths[train_count + test_count:])
+        valid_labels.extend([label] * (len(paths) - train_count - test_count))
+
+                
+    # Standardize our image sizes for the model, while applying random transformations to strengthen model accuracy
+    train_transform = transforms.Compose([
+        transforms.Resize((256, 256)),
+        transforms.RandomHorizontalFlip(p=0.3),
+        transforms.RandomVerticalFlip(p=0.3),
+        transforms.RandomRotation(45),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize( #these are provided hardcoded values
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        )
+    ])
+
+    std_transform = transforms.Compose([
+        transforms.Resize((256, 256)),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize( #these are provided hardcoded values
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        ) 
+    ])
+
+    print(f"Train data size: {len(train_paths)}, {len(train_labels)}")
+    print(f"Test data size: {len(test_paths)}, {len(test_labels)}")
+    print(f"Valid data size: {len(valid_paths)}, {len(valid_labels)}")
+
+    # Create dataset objects
+    train_data = BirdDataset(train_paths, train_labels, transform=train_transform)
+    test_data = BirdDataset(test_paths, test_labels, transform=std_transform)
+    valid_data = BirdDataset(valid_paths, valid_labels, transform=std_transform)
+
+    # Create dataloaders
+    train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
+    test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False) #batch size won't matter if running through all data
+    valid_loader = DataLoader(valid_data, batch_size=BATCH_SIZE, shuffle=False)
+
+    print(f"Train data count: {len(train_data)}; Classes: {train_data.classes}")
+    print(f"Test data count: {len(test_data)}; Classes: {test_data.classes}")
+    print(f"Valid data count: {len(valid_data)}; Classes: {valid_data.classes}")
+    
+    return train_data, train_loader, test_loader, valid_loader
+
+def load_model(model, optimizer, early_stop):
+        """
+        Load best model weights, optimizer state dict, and loss
+        """
+        best_model = torch.load(MODEL_PATH, weights_only=True)
+        model.load_state_dict(best_model["model_state_dict"])
+        optimizer.load_state_dict(best_model["optimizer_state_dict"])
+        early_stop.best_loss = best_model["loss"]
+        # early_stop_train.best_loss = best_model["train_loss"]
+        # early_stop_test.best_loss = best_model["test_loss"]
+        print(f"Loaded best model from {MODEL_PATH}")
+        # return model, optimizer, early_stop_train, early_stop_test
+        return model, optimizer, early_stop
+
+def train_loop(dataloader, model, loss_fn, best_loss, optimizer, writer, device):
+    """
+    Train for one epoch
+    """
+
+    model.train()
+    start_time = time.time()
+
+    for batch_idx, (x, y) in enumerate(dataloader, 1):
+        x, y = x.to(device), y.to(device)
+        pred = model(x)
+        loss = loss_fn(pred, y)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        writer.add_scalar("Loss/train", loss.item(), batch_idx)
+        
+
+        if loss.item() < best_loss: #leaving early stop in here for now but it should be initiated by eval first
+            best_loss = loss.item()
+            print(f"New best training loss at batch {batch_idx}: Loss = {loss.item():.4f}")
+
+            torch.save({
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "loss": loss.item(),
+            }, MODEL_PATH)
+        
+        if batch_idx % 10 == 0:
+            print(f"Batch {batch_idx}")
+
+        # if should_stop:
+            # return model, True
+    
+    end_time = time.time()
+    print(f"Epoch completed: {batch_idx} batches processed")
+    print(f"Time taken: {end_time - start_time:.2f} seconds")
+    # return model, False
+    return model, optimizer, best_loss
+
+def validate(dataloader, model, loss_fn, writer, device, classes):
+    """
+    Evaluate after one epoch
+    """
+    print()
+    print("--- Final Validation ---")
+
+    # initialize variables for confusion matrix
+    correct_pred = {classname: 0 for classname in classes}
+    total_pred = {classname: 0 for classname in classes}
+    all_y_pred = []
+    all_y_true = []
+
+    valid_loss, correct, total = 0, 0, 0
+
+    model.eval()
+
+    with torch.no_grad():
+        for batch_idx, (x, y) in enumerate(dataloader, 1):
+            x, y = x.to(device), y.to(device)
+            pred = model(x)
+            _, predictions = torch.max(pred, 1) # for confusion matrix
+            batch_size = y.size(0)
+            total += batch_size
+            valid_loss += loss_fn(pred, y).item() * batch_size
+            correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
+            # if batch_idx == 100:
+                # print(f"Batch {batch_idx}")
+
+            # for confusion matrix
+            all_y_pred.extend(predictions.cpu().numpy())
+            all_y_true.extend(y.cpu().numpy())
+            for label, prediction in zip(y, predictions):
+                if label == prediction:
+                    correct_pred[classes[label]] += 1
+                total_pred[classes[label]] += 1
+    
+    # create the confusion matrix and store it in a dataframe
+    cf_matrix = confusion_matrix(all_y_true, all_y_pred)
+    df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None], index = [i for i in classes],
+                        columns = [i for i in classes])
+    
+    valid_loss /= total
+    
+    writer.add_scalar("Loss/valid", valid_loss)
+    print("Total Samples: ", total)
+    print("Correct Predictions: ", correct)
+    print(f"Valid Loss: {valid_loss:.4f}")
+    print(f"Validation: Accuracy = {(100 * correct / total):.2f}%")
+
+    return df_cm
+
 def main():
 
     # Identify best device to train on
+    print(f"Cuda available: {torch.cuda.is_available()}")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # cuda:0?
     if(torch.backends.mps.is_available()):
         device = torch.device('mps')
@@ -289,11 +343,14 @@ def main():
     print("--- Tensorboard Setup ---")
     writer = SummaryWriter(LOG_DIR)
 
+    df_cm = pd.DataFrame()
+
     print()
     print("--- Create DataLoaders ---")
-    train_data, test_data, train_loader, test_loader = load_data()
+    train_data, train_loader, test_loader, valid_loader = load_data()
 
     # Test to make sure dataloaders working
+    
     """
     # Random training example
     rand_idx = torch.randint(0, len(train_data), (1,)).item()
@@ -320,36 +377,61 @@ def main():
 
     print()
     print("--- Instantiate Model ---")
-    model = BirdResNet(200)
+    model = BirdResNet(train_data.classes)
     model = model.to(device)
-    best_loss = float("inf")
 
     optimizer = optim.Adam([
         {'params': filter(lambda p: p.requires_grad, model.model.layer4.parameters()),
-        'lr': 1e-4},
+        'lr': 1e-3},
         {'params': filter(lambda p: p.requires_grad, model.model.fc.parameters()),
         'lr': LEARNING_RATE}
-    ], weight_decay=1e-4)
+    ])
 
     criterion = nn.CrossEntropyLoss()
-
+    best_loss = float('inf')
     early_stop = EarlyStopping(PATIENCE)
 
     print("--- Load Best Model ---")
     if os.path.exists(MODEL_PATH):
-        best_model = torch.load(MODEL_PATH, weights_only=True)
-        model.load_state_dict(best_model["model_state_dict"])
-        optimizer.load_state_dict(best_model["optimizer_state_dict"])
-        best_loss = best_model["loss"]
-        print(f"Loaded best model from {MODEL_PATH}")
+        model, optimizer, early_stop = load_model(model, optimizer, early_stop)
 
-    for epoch in range(NUM_EPOCHS):
-        model, best_loss, early_stopped = train_loop(train_loader, model, criterion, optimizer, epoch, writer, device, early_stop)
-        evaluate(test_loader, model, criterion, writer, device, list(set(test_data.labels)))
+    print(f"Batches per epoch: {math.ceil(len(train_data) / BATCH_SIZE)}")
+
+    for epoch in range(1, NUM_EPOCHS+1):
+        print()
+        print(f"\n--- Training Epoch {epoch} ---")
+        model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, writer, device)
+        
+        early_stopped, test_loss = evaluate(test_loader, model, criterion, writer, device, early_stop)
 
         if early_stopped:
-            print("Broke early")
+            print("Broke early, saving best weights")
+            torch.save({
+                "epoch": epoch,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "loss": test_loss,
+            }, BEST_MODEL_PATH)
             break
+
+    df_cm = validate(valid_loader, model, criterion, writer, device,list(set(train_data.labels)))
+
+    print("Now displaying confusion matrix for last executed epoch")
+    plt.figure(figsize = (8,5))
+    sn.heatmap(df_cm, annot=True)
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    #plt.savefig('bird_confusion_matrix.png')
+    # Save to TensorBoard
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    plt.show()
+    buf.seek(0)
+    image = Image.open(buf)
+    image_tensor = transforms.ToTensor()(image)
+    writer.add_image('Confusion Matrix', image_tensor)
+    plt.close()
+
 
 if __name__ == "__main__":
     main()
