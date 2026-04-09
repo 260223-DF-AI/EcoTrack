@@ -29,14 +29,14 @@ LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
 BEST_MODEL_PATH = "model/weights/best_50.pth"
 NUM_EPOCHS = 10
-# LEARNING_RATE_4 = 0.001
-LEARNING_RATE_4 = 0.00001
+LEARNING_RATE_4 = 0.001
+# LEARNING_RATE_4 = 0.00001
 # LEARNING_RATE_4 = 0.0000001
-# LEARNING_RATE_FC = 0.01
-LEARNING_RATE_FC = 0.0001
+LEARNING_RATE_FC = 0.01
+# LEARNING_RATE_FC = 0.0001
 # LEARNING_RATE_FC = 0.000001
 PATIENCE = 2
-BATCH_SIZE = 256
+BATCH_SIZE = 128
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -198,7 +198,7 @@ def load_model(model, optimizer, early_stop, device_type):
         """
         Load best model weights, optimizer state dict, and loss
         """
-        best_model = torch.load(MODEL_PATH, weights_only=True, map_location=device_type)
+        best_model = torch.load(BEST_MODEL_PATH, weights_only=True, map_location=device_type)
         model.load_state_dict(best_model["model_state_dict"])
         optimizer.load_state_dict(best_model["optimizer_state_dict"])
         early_stop.best_loss = best_model["loss"]
@@ -259,13 +259,48 @@ def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer,
                 "loss": loss.item(),
             }, MODEL_PATH)
         
-        if batch_idx % 100 == 0:
+        if batch_idx % 10 == 0:
             print(f"Batch {batch_idx}")
     
     end_time = time.time()
     print(f"Epoch completed: {batch_idx} batches processed")
     print(f"Time taken: {end_time - start_time:.2f} seconds")
     return model, optimizer, best_loss
+
+def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
+    """
+    Evaluate after one epoch
+    """
+    print()
+    print("--- Eval Model ---")
+
+    test_loss, correct, total = 0, 0, 0
+
+    model.eval()
+
+    with torch.no_grad():
+        for batch_idx, (x, y) in enumerate(dataloader, 1):
+            x, y = x.to(device), y.to(device)
+            pred = model(x)
+            batch_size = y.size(0)
+            total += batch_size
+            test_loss += loss_fn(pred, y).item() * batch_size
+            correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
+        
+    test_loss /= total
+
+    should_stop, improved = early_stop(test_loss)
+
+    if improved: #leaving early stop in here for now but it should be initiated by eval first
+        print(f"New best model: Loss = {test_loss:.4f}")
+        
+    writer.add_scalar("Loss/test", test_loss)
+    print("Total Samples: ", total)
+    print("Correct Predictions: ", correct)
+    print(f"Test Loss: {test_loss:.4f}")
+    print(f"Evaluation: Accuracy = {(100 * correct / total):.2f}%")
+
+    return improved, should_stop, test_loss
 
 def validate(dataloader, model, loss_fn, writer, device, classes):
     """
@@ -319,40 +354,6 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
 
     return df_cm
 
-def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
-    """
-    Evaluate after one epoch
-    """
-    print()
-    print("--- Eval Model ---")
-
-    test_loss, correct, total = 0, 0, 0
-
-    model.eval()
-
-    with torch.no_grad():
-        for batch_idx, (x, y) in enumerate(dataloader, 1):
-            x, y = x.to(device), y.to(device)
-            pred = model(x)
-            batch_size = y.size(0)
-            total += batch_size
-            test_loss += loss_fn(pred, y).item() * batch_size
-            correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
-        
-    test_loss /= total
-
-    should_stop, improved = early_stop(test_loss)
-
-    if improved: #leaving early stop in here for now but it should be initiated by eval first
-        print(f"New best model: Loss = {test_loss:.4f}")
-        
-    writer.add_scalar("Loss/test", test_loss)
-    print("Total Samples: ", total)
-    print("Correct Predictions: ", correct)
-    print(f"Test Loss: {test_loss:.4f}")
-    print(f"Evaluation: Accuracy = {(100 * correct / total):.2f}%")
-
-    return should_stop, test_loss
 
 def main():
 
@@ -434,7 +435,7 @@ def main():
         print(f"\n--- Training Epoch {epoch} ---")
         model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, scaler, writer, device, device_type)
         
-        early_stopped, test_loss = evaluate(test_loader, model, criterion, writer, device, early_stop)
+        improved, early_stopped, test_loss = evaluate(test_loader, model, criterion, writer, device, early_stop)
 
         if early_stopped:
             print("Broke early, saving best weights")
