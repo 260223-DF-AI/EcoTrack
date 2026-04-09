@@ -43,19 +43,19 @@ BATCH_SIZE = 32
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
-class BirdResNet(nn.Module):
+class BirdResNetModel(nn.Module):
     """
     Bird species classification model. Built on pretrained ResNet model.
     """
     def __init__(self, num_classes):
-        super(BirdResNet, self).__init__()
+        super(BirdResNetModel, self).__init__()
 
         # Transfer Learning based on ResNet model
         # Options are 18, 34, 50, 101, and 151
         # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
+        # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
         # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
         # Freeze ResNet params
@@ -214,6 +214,7 @@ def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer,
     """
     Train for one epoch
     """
+    # amp = True
 
     print(f"Using AMP: {amp}")
 
@@ -432,7 +433,7 @@ def main():
 
     print()
     print("--- Instantiate Model ---")
-    model = BirdResNet(train_data.classes)
+    model = BirdResNetModel(train_data.classes)
     model = model.to(device)
 
     optimizer = optim.Adam([
@@ -478,7 +479,7 @@ def main():
     df_cm = validate(valid_loader, model, criterion, writer, device,list(set(train_data.labels)))
 
     print("Now displaying confusion matrix for last executed epoch")
-    plt.figure(figsize = (8,5))
+    plt.figure(figsize = (10,7))
     sn.heatmap(df_cm, annot=True)
     plt.ylabel('True label')
     plt.xlabel('Predicted label')
