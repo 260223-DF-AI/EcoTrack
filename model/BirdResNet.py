@@ -1,8 +1,10 @@
 import os
-import time
+import io
 import ssl
 import math
 import random
+import time
+from datetime import datetime
 
 import torch
 import torch.nn as nn
@@ -12,19 +14,20 @@ from torch.utils.tensorboard import SummaryWriter # tensorboard --logdir=./runs/
 from torch.amp import autocast, GradScaler
 from torchvision import transforms
 import torchvision.models as models
+
 from sklearn.metrics import confusion_matrix
 import seaborn as sn
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+
 from PIL import Image
-import io
 
 # Global Variables
 DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
-BEST_MODEL_PATH = "model/weights/best.pth"
+BEST_MODEL_PATH = "model/weights/best_50.pth"
 NUM_EPOCHS = 10
 LEARNING_RATE_4 = 0.001
 # LEARNING_RATE_4 = 0.00001
@@ -368,7 +371,8 @@ def main():
 
     print()
     print("--- Tensorboard Setup ---")
-    writer = SummaryWriter(LOG_DIR)
+    run_name = datetime.now().strftime("%Y%m%d-%H%M%S")
+    writer = SummaryWriter(f"runs/bird_logs/{run_name}")
 
     df_cm = pd.DataFrame()
 
