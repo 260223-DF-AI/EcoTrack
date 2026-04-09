@@ -43,12 +43,12 @@ BATCH_SIZE = 32
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
-class BirdResNetModel(nn.Module):
+class BirdResNet(nn.Module):
     """
     Bird species classification model. Built on pretrained ResNet model.
     """
     def __init__(self, num_classes):
-        super(BirdResNetModel, self).__init__()
+        super(BirdResNet, self).__init__()
 
         # Transfer Learning based on ResNet model
         # Options are 18, 34, 50, 101, and 151
@@ -433,7 +433,7 @@ def main():
 
     print()
     print("--- Instantiate Model ---")
-    model = BirdResNetModel(train_data.classes)
+    model = BirdResNet(train_data.classes)
     model = model.to(device)
 
     optimizer = optim.Adam([

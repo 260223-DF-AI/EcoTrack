@@ -3,7 +3,7 @@ import torch
 from PIL import Image
 from torchvision import transforms
 
-from BirdResNet import BirdResNetModel
+from BirdResNet import BirdResNet
 
 MODEL_PATH = "model/weights/model101_93p_evalacc.pth" # this one is good for nighthawks and black footed albatros
 
@@ -18,7 +18,7 @@ std_transform = transforms.Compose([
         ) 
     ])
 
-model = BirdResNetModel(200)
+model = BirdResNet(200)
 if os.path.exists(MODEL_PATH):
         best_model = torch.load(MODEL_PATH, weights_only=True)
         model.load_state_dict(best_model["model_state_dict"])
