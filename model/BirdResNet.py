@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter # tensorboard --logdir=./runs/bird_logs
+from torch.amp import autocast, GradScaler
 from torchvision import transforms
 import torchvision.models as models
 
@@ -22,7 +23,7 @@ BEST_MODEL_PATH = "model/weights/best.pth"
 NUM_EPOCHS = 5
 LEARNING_RATE = 0.01
 PATIENCE = 2
-BATCH_SIZE = 128
+BATCH_SIZE = 32
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -194,25 +195,46 @@ def load_model(model, optimizer, early_stop):
         # return model, optimizer, early_stop_train, early_stop_test
         return model, optimizer, early_stop
 
-def train_loop(dataloader, model, loss_fn, best_loss, optimizer, writer, device):
+def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer, device, device_type, amp: bool = False):
     """
     Train for one epoch
     """
+
+    print(f"Using AMP: {amp}")
 
     model.train()
     start_time = time.time()
 
     for batch_idx, (x, y) in enumerate(dataloader, 1):
+        # print(f"Batch {batch_idx}")
         x, y = x.to(device), y.to(device)
         # print(x.device)
-        pred = model(x)
-        loss = loss_fn(pred, y)
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        # print("Cast")
+        if amp:
+            with autocast(device_type):
+                # print("Predict")
+                pred = model(x)
+                # print("Loss")
+                loss = loss_fn(pred, y)
+            # print("Scale")
+            scaler.scale(loss).backward()
+            # print("Unscale")
+            scaler.unscale_(optimizer)
+            # print("Clip")
+            nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            # print("Step")
+            scaler.step(optimizer)
+            # print("Update")
+            scaler.update()
+        else:
+            pred = model(x)
+            loss = loss_fn(pred, y)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
         writer.add_scalar("Loss/train", loss.item(), batch_idx)
-        
 
         if loss.item() < best_loss: #leaving early stop in here for now but it should be initiated by eval first
             best_loss = loss.item()
@@ -224,16 +246,12 @@ def train_loop(dataloader, model, loss_fn, best_loss, optimizer, writer, device)
                 "loss": loss.item(),
             }, MODEL_PATH)
         
-        if batch_idx % 10 == 0:
+        if batch_idx % 100 == 0:
             print(f"Batch {batch_idx}")
-
-        # if should_stop:
-            # return model, True
     
     end_time = time.time()
     print(f"Epoch completed: {batch_idx} batches processed")
     print(f"Time taken: {end_time - start_time:.2f} seconds")
-    # return model, False
     return model, optimizer, best_loss
 
 def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
@@ -305,11 +323,18 @@ def validate(dataloader, model, loss_fn, writer, device):
 
 def main():
 
+    # Manually set random seed for reproducibility   
+    # torch.manual_seed(327)
+    # torch.backends.cudnn.deterministic = True
+
     # Identify best device to train on
-    print(f"Cuda available: {torch.cuda.is_available()}")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # cuda:0?
+    device_type = "cuda" if torch.cuda.is_available() else "cpu"
     if(torch.backends.mps.is_available()):
-        device = torch.device('mps')
+        device_type = "mps"
+    device = torch.device(device_type) # cuda:0?
+    print(f"Device: {device_type}")
+
+    scaler = GradScaler(device_type)
 
     print()
     print("--- Tensorboard Setup ---")
@@ -358,16 +383,17 @@ def main():
     best_loss = float('inf')
     early_stop = EarlyStopping(PATIENCE)
 
+    print()
     print("--- Load Best Model ---")
     if os.path.exists(BEST_MODEL_PATH):
         model, optimizer, early_stop = load_model(model, optimizer, early_stop)
 
+    print()
     print(f"Batches per epoch: {math.ceil(len(train_data) / BATCH_SIZE)}")
-
     for epoch in range(1, NUM_EPOCHS+1):
         print()
         print(f"\n--- Training Epoch {epoch} ---")
-        model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, writer, device)
+        model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, scaler, writer, device, device_type)
         
         early_stopped, test_loss = evaluate(test_loader, model, criterion, writer, device, early_stop)
 
