@@ -1,8 +1,9 @@
 import os
-import time
 import ssl
 import math
 import random
+import time
+from datetime import datetime
 
 import torch
 import torch.nn as nn
@@ -19,11 +20,12 @@ from PIL import Image
 DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
-BEST_MODEL_PATH = "model/weights/best.pth"
-NUM_EPOCHS = 5
+BEST_MODEL_PATH = "model/weights/best_152.pth"
+NUM_EPOCHS = 20
 LEARNING_RATE = 0.01
 PATIENCE = 2
 BATCH_SIZE = 32
+AMP = False
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -38,23 +40,23 @@ class BirdResNet(nn.Module):
         # Transfer Learning based on ResNet model
         # Options are 18, 34, 50, 101, and 151
         # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+        # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
         # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
-        # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
+        self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
         # Freeze ResNet params
         for param in self.model.parameters():
-            param.requires_grad = False
+            param.requires_grad = True
 
         # Replace final fully-connected linear layer with our own to fine-tune
         # Allows us to set our number of output classes
         num_ftrs = self.model.fc.in_features
         self.model.fc = nn.Linear(num_ftrs, num_classes)
         
-        for name, param in self.model.named_parameters():
-            if "layer4" in name or "fc" in name:
-                param.requires_grad = True
+        # for name, param in self.model.named_parameters():
+        #     if "layer4" in name or "fc" in name:
+        #         param.requires_grad = True
 
     def forward(self, x):
         return self.model(x)
@@ -181,26 +183,21 @@ def load_data():
     
     return train_data, train_loader, test_loader, valid_loader
 
-def load_model(model, optimizer, early_stop):
+def load_model(path, model, optimizer, early_stop):
         """
         Load best model weights, optimizer state dict, and loss
         """
-        best_model = torch.load(MODEL_PATH, weights_only=True)
+        best_model = torch.load(path, weights_only=True)
         model.load_state_dict(best_model["model_state_dict"])
         optimizer.load_state_dict(best_model["optimizer_state_dict"])
         early_stop.best_loss = best_model["loss"]
-        # early_stop_train.best_loss = best_model["train_loss"]
-        # early_stop_test.best_loss = best_model["test_loss"]
-        print(f"Loaded best model from {MODEL_PATH}")
-        # return model, optimizer, early_stop_train, early_stop_test
+        print(f"Loaded best model from {path}")
         return model, optimizer, early_stop
 
 def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer, device, device_type, amp: bool = False):
     """
     Train for one epoch
     """
-
-    print(f"Using AMP: {amp}")
 
     model.train()
     start_time = time.time()
@@ -289,7 +286,7 @@ def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
     print(f"Test Loss: {test_loss:.4f}")
     print(f"Evaluation: Accuracy = {(100 * correct / total):.2f}%")
 
-    return should_stop, test_loss
+    return improved, should_stop, test_loss
 
 def validate(dataloader, model, loss_fn, writer, device):
     """
@@ -338,7 +335,8 @@ def main():
 
     print()
     print("--- Tensorboard Setup ---")
-    writer = SummaryWriter(LOG_DIR)
+    run_name = datetime.now().strftime("%Y%m%d-%H%M%S")
+    writer = SummaryWriter(f"runs/bird_logs/{run_name}")
 
     print()
     print("--- Create DataLoaders ---")
@@ -386,27 +384,32 @@ def main():
     print()
     print("--- Load Best Model ---")
     if os.path.exists(BEST_MODEL_PATH):
-        model, optimizer, early_stop = load_model(model, optimizer, early_stop)
+        model, optimizer, early_stop = load_model(BEST_MODEL_PATH, model, optimizer, early_stop)
 
     print()
     print(f"Batches per epoch: {math.ceil(len(train_data) / BATCH_SIZE)}")
+    print(f"Using AMP: {AMP}")
     for epoch in range(1, NUM_EPOCHS+1):
         print()
         print(f"\n--- Training Epoch {epoch} ---")
-        model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, scaler, writer, device, device_type)
+        model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, scaler, writer, device, device_type, AMP)
         
-        early_stopped, test_loss = evaluate(test_loader, model, criterion, writer, device, early_stop)
+        improved, early_stopped, test_loss = evaluate(test_loader, model, criterion, writer, device, early_stop)
 
-        if early_stopped:
-            print("Broke early, saving best weights")
+        if improved:
+            print("New best. Saving best weights")
             torch.save({
                 "epoch": epoch,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "loss": test_loss,
             }, BEST_MODEL_PATH)
+        
+        if early_stopped:
+            print(f"No improvements in {PATIENCE} epochs. Ending training early.")
             break
 
+    model, optimizer, early_stop = load_model(BEST_MODEL_PATH, model, optimizer, early_stop)
     validate(valid_loader, model, criterion, writer, device)
 
 if __name__ == "__main__":
