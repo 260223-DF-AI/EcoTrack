@@ -318,8 +318,9 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
     for value in species_statuses.statuses.values():
         status_counts[value] = {
             "correct" : 0,
+            "incorrect" : 0,
             "total" : 0,
-            "accuracy" : 0.0
+            # "accuracy" : 0.0
         }
 
     # initialize variables for confusion matrix
@@ -352,6 +353,9 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
                 if label == prediction:
                     correct_pred[classes[label.item()]] += 1
                     status_counts[status]["correct"] +=1
+                else:
+                    status_counts[status]["incorrect"] +=1
+
                 total_pred[classes[label.item()]] += 1
                 status_counts[status]["total"] +=1
     
@@ -360,8 +364,13 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
             accuracy = 100*status_counts[key]["correct"] / status_counts[key]["total"]
         except:
             accuracy = -1
+        try:
+            incorrect_p = 100*status_counts[key]["incorrect"] / status_counts[key]["total"]
+        except:
+            incorrect_p = -1
         status_counts[key]["accuracy"] = accuracy
         print(f"{key}: {accuracy:.2f}%")
+        print(f"{key}: {incorrect_p:.2f}% (wrong class)")
     
     # create the confusion matrix and store it in a dataframe
     cf_matrix = confusion_matrix(all_y_true, all_y_pred)
