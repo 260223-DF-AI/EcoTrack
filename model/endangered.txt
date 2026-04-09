@@ -1,15 +1,3 @@
-NE - NOT EVALUATED
-DD - DATA DEFICIENT
-LC - LEAST CONCERN
-NT - NEAR THREATENED
-VU - VULNERABLE
-EN - ENDANGERED
-CR - CRITICALLY ENDANGERED
-EW - EXTINCT IN THE WILD
-EX - EXTINCT
-According to IUCN as of 4/2/2026
-*If classes below correlate to a family or group of species, default to the most vulnerable
-
 1 001.Black_footed_Albatross, NT
 2 002.Laysan_Albatross, NT
 3 003.Sooty_Albatross, EN
@@ -61,6 +49,7 @@ According to IUCN as of 4/2/2026
 49 049.Boat_tailed_Grackle, LC
 50 050.Eared_Grebe, LC
 51 051.Horned_Grebe, NT*
+52 052.Pied_billed_Grebe, LC
 53 053.Western_Grebe, LC
 54 054.Blue_Grosbeak, LC
 55 055.Evening_Grosbeak, VU

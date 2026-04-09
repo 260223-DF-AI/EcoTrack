@@ -23,20 +23,22 @@ import matplotlib.pyplot as plt
 
 from PIL import Image
 
+from species_status import SpeciesStatuses
+
 # Global Variables
 DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
 BEST_MODEL_PATH = "model/weights/best_50.pth"
 NUM_EPOCHS = 10
-LEARNING_RATE_4 = 0.001
-# LEARNING_RATE_4 = 0.00001
+# LEARNING_RATE_4 = 0.001
+LEARNING_RATE_4 = 0.00001
 # LEARNING_RATE_4 = 0.0000001
-LEARNING_RATE_FC = 0.01
-# LEARNING_RATE_FC = 0.0001
+# LEARNING_RATE_FC = 0.01
+LEARNING_RATE_FC = 0.0001
 # LEARNING_RATE_FC = 0.000001
 PATIENCE = 2
-BATCH_SIZE = 128
+BATCH_SIZE = 32
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -259,7 +261,7 @@ def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer,
                 "loss": loss.item(),
             }, MODEL_PATH)
         
-        if batch_idx % 10 == 0:
+        if batch_idx % 100 == 0:
             print(f"Batch {batch_idx}")
     
     end_time = time.time()
@@ -309,6 +311,16 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
     print()
     print("--- Final Validation ---")
 
+    species_statuses = SpeciesStatuses()
+    status_counts = {}
+
+    for value in species_statuses.statuses.values():
+        status_counts[value] = {
+            "correct" : 0,
+            "total" : 0,
+            "accuracy" : 0.0
+        }
+
     # initialize variables for confusion matrix
     correct_pred = {classname: 0 for classname in classes}
     total_pred = {classname: 0 for classname in classes}
@@ -335,9 +347,20 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
             all_y_pred.extend(predictions.cpu().numpy())
             all_y_true.extend(y.cpu().numpy())
             for label, prediction in zip(y, predictions):
+                status = species_statuses[label.item()+1][1]
                 if label == prediction:
-                    correct_pred[classes[label]] += 1
-                total_pred[classes[label]] += 1
+                    correct_pred[classes[label.item()]] += 1
+                    status_counts[status]["correct"] +=1
+                total_pred[classes[label.item()]] += 1
+                status_counts[status]["total"] +=1
+    
+    for key, value in status_counts.items():
+        try:
+            accuracy = 100*status_counts[key]["correct"] / status_counts[key]["total"]
+        except:
+            accuracy = -1
+        status_counts[key]["accuracy"] = accuracy
+        print(f"{key}: {accuracy:.2f}%")
     
     # create the confusion matrix and store it in a dataframe
     cf_matrix = confusion_matrix(all_y_true, all_y_pred)
@@ -431,20 +454,25 @@ def main():
     print()
     print(f"Batches per epoch: {math.ceil(len(train_data) / BATCH_SIZE)}")
     for epoch in range(1, NUM_EPOCHS+1):
+        # break # uncomment this to just run validation
         print()
         print(f"\n--- Training Epoch {epoch} ---")
         model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, scaler, writer, device, device_type)
         
         improved, early_stopped, test_loss = evaluate(test_loader, model, criterion, writer, device, early_stop)
 
-        if early_stopped:
-            print("Broke early, saving best weights")
+        if improved:
+            print("New best, saving best weights")
             torch.save({
                 "epoch": epoch,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "loss": test_loss,
             }, BEST_MODEL_PATH)
+            break
+
+        if early_stopped:
+            print(f"No improvements in {PATIENCE} epochs. Ending training early.")
             break
 
     df_cm = validate(valid_loader, model, criterion, writer, device,list(set(train_data.labels)))
