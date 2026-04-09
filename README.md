@@ -24,6 +24,19 @@ Fine-tuning a torchvision ResNet model to classify bird images among 200 classes
 
 # Resources
 
+## Endangered Status
+- NE: NOT EVALUATED
+- DD: DATA DEFICIENT
+- LC: LEAST CONCERN
+- NT: NEAR THREATENED
+- VU: VULNERABLE
+- EN: ENDANGERED
+- CR: CRITICALLY ENDANGERED
+- EW: EXTINCT IN THE WILD
+- EX: EXTINCT
+According to IUCN as of 4/2/2026
+*If classes correlate to a family or group of species, default to the most vulnerable
+
 ## Images
 [Kaggle - Caltech](https://www.kaggle.com/datasets/veeralakrishna/200-bird-species-with-11788-images?resource=download)
 

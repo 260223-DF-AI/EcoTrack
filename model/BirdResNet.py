@@ -1,8 +1,10 @@
 import os
-import time
+import io
 import ssl
 import math
 import random
+import time
+from datetime import datetime
 
 import torch
 import torch.nn as nn
@@ -12,23 +14,31 @@ from torch.utils.tensorboard import SummaryWriter # tensorboard --logdir=./runs/
 from torch.amp import autocast, GradScaler
 from torchvision import transforms
 import torchvision.models as models
+
 from sklearn.metrics import confusion_matrix
 import seaborn as sn
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+
 from PIL import Image
-import io
+
+from species_status import SpeciesStatuses
 
 # Global Variables
 DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
-BEST_MODEL_PATH = "model/weights/best.pth"
+BEST_MODEL_PATH = "model/weights/best_50.pth"
 NUM_EPOCHS = 10
-LEARNING_RATE = 0.00001
-PATIENCE = 10
-BATCH_SIZE = 64
+# LEARNING_RATE_4 = 0.001
+LEARNING_RATE_4 = 0.00001
+# LEARNING_RATE_4 = 0.0000001
+# LEARNING_RATE_FC = 0.01
+LEARNING_RATE_FC = 0.0001
+# LEARNING_RATE_FC = 0.000001
+PATIENCE = 2
+BATCH_SIZE = 32
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -190,13 +200,13 @@ def load_model(model, optimizer, early_stop, device_type):
         """
         Load best model weights, optimizer state dict, and loss
         """
-        best_model = torch.load(MODEL_PATH, weights_only=True, map_location=device_type)
+        best_model = torch.load(BEST_MODEL_PATH, weights_only=True, map_location=device_type)
         model.load_state_dict(best_model["model_state_dict"])
         optimizer.load_state_dict(best_model["optimizer_state_dict"])
         early_stop.best_loss = best_model["loss"]
         # early_stop_train.best_loss = best_model["train_loss"]
         # early_stop_test.best_loss = best_model["test_loss"]
-        print(f"Loaded best model from {MODEL_PATH}")
+        print(f"Loaded best model from {BEST_MODEL_PATH}")
         # return model, optimizer, early_stop_train, early_stop_test
         return model, optimizer, early_stop
 
@@ -260,58 +270,6 @@ def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer,
     print(f"Time taken: {end_time - start_time:.2f} seconds")
     return model, optimizer, best_loss
 
-def validate(dataloader, model, loss_fn, writer, device, classes):
-    """
-    Evaluate after one epoch
-    """
-    print()
-    print("--- Final Validation ---")
-
-    # initialize variables for confusion matrix
-    correct_pred = {classname: 0 for classname in classes}
-    total_pred = {classname: 0 for classname in classes}
-    all_y_pred = []
-    all_y_true = []
-
-    valid_loss, correct, total = 0, 0, 0
-
-    model.eval()
-
-    with torch.no_grad():
-        for batch_idx, (x, y) in enumerate(dataloader, 1):
-            x, y = x.to(device), y.to(device)
-            pred = model(x)
-            _, predictions = torch.max(pred, 1) # for confusion matrix
-            batch_size = y.size(0)
-            total += batch_size
-            valid_loss += loss_fn(pred, y).item() * batch_size
-            correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
-            # if batch_idx == 100:
-                # print(f"Batch {batch_idx}")
-
-            # for confusion matrix
-            all_y_pred.extend(predictions.cpu().numpy())
-            all_y_true.extend(y.cpu().numpy())
-            for label, prediction in zip(y, predictions):
-                if label == prediction:
-                    correct_pred[classes[label]] += 1
-                total_pred[classes[label]] += 1
-    
-    # create the confusion matrix and store it in a dataframe
-    cf_matrix = confusion_matrix(all_y_true, all_y_pred)
-    df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None], index = [i for i in classes],
-                        columns = [i for i in classes])
-    
-    valid_loss /= total
-    
-    writer.add_scalar("Loss/valid", valid_loss)
-    print("Total Samples: ", total)
-    print("Correct Predictions: ", correct)
-    print(f"Valid Loss: {valid_loss:.4f}")
-    print(f"Validation: Accuracy = {(100 * correct / total):.2f}%")
-
-    return df_cm
-
 def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
     """
     Evaluate after one epoch
@@ -345,7 +303,81 @@ def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
     print(f"Test Loss: {test_loss:.4f}")
     print(f"Evaluation: Accuracy = {(100 * correct / total):.2f}%")
 
-    return should_stop, test_loss
+    return improved, should_stop, test_loss
+
+def validate(dataloader, model, loss_fn, writer, device, classes):
+    """
+    Evaluate after one epoch
+    """
+    print()
+    print("--- Final Validation ---")
+
+    species_statuses = SpeciesStatuses()
+    status_counts = {}
+
+    for value in species_statuses.statuses.values():
+        status_counts[value] = {
+            "correct" : 0,
+            "total" : 0,
+            "accuracy" : 0.0
+        }
+
+    # initialize variables for confusion matrix
+    correct_pred = {classname: 0 for classname in classes}
+    total_pred = {classname: 0 for classname in classes}
+    all_y_pred = []
+    all_y_true = []
+
+    valid_loss, correct, total = 0, 0, 0
+
+    model.eval()
+
+    with torch.no_grad():
+        for batch_idx, (x, y) in enumerate(dataloader, 1):
+            x, y = x.to(device), y.to(device)
+            pred = model(x)
+            _, predictions = torch.max(pred, 1) # for confusion matrix
+            batch_size = y.size(0)
+            total += batch_size
+            valid_loss += loss_fn(pred, y).item() * batch_size
+            correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
+            # if batch_idx == 100:
+                # print(f"Batch {batch_idx}")
+
+            # for confusion matrix
+            all_y_pred.extend(predictions.cpu().numpy())
+            all_y_true.extend(y.cpu().numpy())
+            for label, prediction in zip(y, predictions):
+                status = species_statuses[label.item()+1][1]
+                if label == prediction:
+                    correct_pred[classes[label.item()]] += 1
+                    status_counts[status]["correct"] +=1
+                total_pred[classes[label.item()]] += 1
+                status_counts[status]["total"] +=1
+    
+    for key, value in status_counts.items():
+        try:
+            accuracy = 100*status_counts[key]["correct"] / status_counts[key]["total"]
+        except:
+            accuracy = -1
+        status_counts[key]["accuracy"] = accuracy
+        print(f"{key}: {accuracy:.2f}%")
+    
+    # create the confusion matrix and store it in a dataframe
+    cf_matrix = confusion_matrix(all_y_true, all_y_pred)
+    df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None], index = [i for i in classes],
+                        columns = [i for i in classes])
+    
+    valid_loss /= total
+    
+    writer.add_scalar("Loss/valid", valid_loss)
+    print("Total Samples: ", total)
+    print("Correct Predictions: ", correct)
+    print(f"Valid Loss: {valid_loss:.4f}")
+    print(f"Validation: Accuracy = {(100 * correct / total):.2f}%")
+
+    return df_cm
+
 
 def main():
 
@@ -364,7 +396,8 @@ def main():
 
     print()
     print("--- Tensorboard Setup ---")
-    writer = SummaryWriter(LOG_DIR)
+    run_name = datetime.now().strftime("%Y%m%d-%H%M%S")
+    writer = SummaryWriter(f"runs/bird_logs/{run_name}")
 
     df_cm = pd.DataFrame()
 
@@ -405,9 +438,9 @@ def main():
 
     optimizer = optim.Adam([
         {'params': filter(lambda p: p.requires_grad, model.model.layer4.parameters()),
-        'lr': 1e-7},
+        'lr': LEARNING_RATE_4},
         {'params': filter(lambda p: p.requires_grad, model.model.fc.parameters()),
-        'lr': LEARNING_RATE}
+        'lr': LEARNING_RATE_FC}
     ])
 
     criterion = nn.CrossEntropyLoss()
@@ -422,20 +455,25 @@ def main():
     print()
     print(f"Batches per epoch: {math.ceil(len(train_data) / BATCH_SIZE)}")
     for epoch in range(1, NUM_EPOCHS+1):
+        # break # uncomment this to just run validation
         print()
         print(f"\n--- Training Epoch {epoch} ---")
         model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, scaler, writer, device, device_type)
         
-        early_stopped, test_loss = evaluate(test_loader, model, criterion, writer, device, early_stop)
+        improved, early_stopped, test_loss = evaluate(test_loader, model, criterion, writer, device, early_stop)
 
-        if early_stopped:
-            print("Broke early, saving best weights")
+        if improved:
+            print("New best, saving best weights")
             torch.save({
                 "epoch": epoch,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "loss": test_loss,
             }, BEST_MODEL_PATH)
+            break
+
+        if early_stopped:
+            print(f"No improvements in {PATIENCE} epochs. Ending training early.")
             break
 
     df_cm = validate(valid_loader, model, criterion, writer, device,list(set(train_data.labels)))
