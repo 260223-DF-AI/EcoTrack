@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter # tensorboard --logdir=./runs/bird_logs
+from torch.amp import autocast, GradScaler
 from torchvision import transforms
 import torchvision.models as models
 from sklearn.metrics import confusion_matrix
@@ -86,41 +87,6 @@ class BirdDataset(Dataset):
             image = self.transform(image)
         
         return image, label
-
-def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
-    """
-    Evaluate after one epoch
-    """
-    print()
-    print("--- Eval Model ---")
-
-    test_loss, correct, total = 0, 0, 0
-
-    model.eval()
-
-    with torch.no_grad():
-        for batch_idx, (x, y) in enumerate(dataloader, 1):
-            x, y = x.to(device), y.to(device)
-            pred = model(x)
-            batch_size = y.size(0)
-            total += batch_size
-            test_loss += loss_fn(pred, y).item() * batch_size
-            correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
-        
-    test_loss /= total
-
-    should_stop, improved = early_stop(test_loss)
-
-    if improved: #leaving early stop in here for now but it should be initiated by eval first
-        print(f"New best model: Loss = {test_loss:.4f}")
-        
-    writer.add_scalar("Loss/test", test_loss)
-    print("Total Samples: ", total)
-    print("Correct Predictions: ", correct)
-    print(f"Test Loss: {test_loss:.4f}")
-    print(f"Evaluation: Accuracy = {(100 * correct / total):.2f}%")
-
-    return should_stop, test_loss
 
 class EarlyStopping:
     def __init__(self, patience: int = 20):
@@ -204,10 +170,6 @@ def load_data():
         ) 
     ])
 
-    print(f"Train data size: {len(train_paths)}, {len(train_labels)}")
-    print(f"Test data size: {len(test_paths)}, {len(test_labels)}")
-    print(f"Valid data size: {len(valid_paths)}, {len(valid_labels)}")
-
     # Create dataset objects
     train_data = BirdDataset(train_paths, train_labels, transform=train_transform)
     test_data = BirdDataset(test_paths, test_labels, transform=std_transform)
@@ -224,11 +186,11 @@ def load_data():
     
     return train_data, train_loader, test_loader, valid_loader
 
-def load_model(model, optimizer, early_stop):
+def load_model(model, optimizer, early_stop, device_type):
         """
         Load best model weights, optimizer state dict, and loss
         """
-        best_model = torch.load(MODEL_PATH, weights_only=True)
+        best_model = torch.load(MODEL_PATH, weights_only=True, map_location=device_type)
         model.load_state_dict(best_model["model_state_dict"])
         optimizer.load_state_dict(best_model["optimizer_state_dict"])
         early_stop.best_loss = best_model["loss"]
@@ -238,24 +200,46 @@ def load_model(model, optimizer, early_stop):
         # return model, optimizer, early_stop_train, early_stop_test
         return model, optimizer, early_stop
 
-def train_loop(dataloader, model, loss_fn, best_loss, optimizer, writer, device):
+def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer, device, device_type, amp: bool = False):
     """
     Train for one epoch
     """
+
+    print(f"Using AMP: {amp}")
 
     model.train()
     start_time = time.time()
 
     for batch_idx, (x, y) in enumerate(dataloader, 1):
+        # print(f"Batch {batch_idx}")
         x, y = x.to(device), y.to(device)
-        pred = model(x)
-        loss = loss_fn(pred, y)
+        # print(x.device)
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        # print("Cast")
+        if amp:
+            with autocast(device_type):
+                # print("Predict")
+                pred = model(x)
+                # print("Loss")
+                loss = loss_fn(pred, y)
+            # print("Scale")
+            scaler.scale(loss).backward()
+            # print("Unscale")
+            scaler.unscale_(optimizer)
+            # print("Clip")
+            nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            # print("Step")
+            scaler.step(optimizer)
+            # print("Update")
+            scaler.update()
+        else:
+            pred = model(x)
+            loss = loss_fn(pred, y)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
         writer.add_scalar("Loss/train", loss.item(), batch_idx)
-        
 
         if loss.item() < best_loss: #leaving early stop in here for now but it should be initiated by eval first
             best_loss = loss.item()
@@ -267,16 +251,12 @@ def train_loop(dataloader, model, loss_fn, best_loss, optimizer, writer, device)
                 "loss": loss.item(),
             }, MODEL_PATH)
         
-        if batch_idx % 10 == 0:
+        if batch_idx % 100 == 0:
             print(f"Batch {batch_idx}")
-
-        # if should_stop:
-            # return model, True
     
     end_time = time.time()
     print(f"Epoch completed: {batch_idx} batches processed")
     print(f"Time taken: {end_time - start_time:.2f} seconds")
-    # return model, False
     return model, optimizer, best_loss
 
 def validate(dataloader, model, loss_fn, writer, device, classes):
@@ -331,13 +311,55 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
 
     return df_cm
 
+def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
+    """
+    Evaluate after one epoch
+    """
+    print()
+    print("--- Eval Model ---")
+
+    test_loss, correct, total = 0, 0, 0
+
+    model.eval()
+
+    with torch.no_grad():
+        for batch_idx, (x, y) in enumerate(dataloader, 1):
+            x, y = x.to(device), y.to(device)
+            pred = model(x)
+            batch_size = y.size(0)
+            total += batch_size
+            test_loss += loss_fn(pred, y).item() * batch_size
+            correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
+        
+    test_loss /= total
+
+    should_stop, improved = early_stop(test_loss)
+
+    if improved: #leaving early stop in here for now but it should be initiated by eval first
+        print(f"New best model: Loss = {test_loss:.4f}")
+        
+    writer.add_scalar("Loss/test", test_loss)
+    print("Total Samples: ", total)
+    print("Correct Predictions: ", correct)
+    print(f"Test Loss: {test_loss:.4f}")
+    print(f"Evaluation: Accuracy = {(100 * correct / total):.2f}%")
+
+    return should_stop, test_loss
+
 def main():
 
+    # Manually set random seed for reproducibility   
+    # torch.manual_seed(327)
+    # torch.backends.cudnn.deterministic = True
+
     # Identify best device to train on
-    print(f"Cuda available: {torch.cuda.is_available()}")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # cuda:0?
+    device_type = "cuda" if torch.cuda.is_available() else "cpu"
     if(torch.backends.mps.is_available()):
-        device = torch.device('mps')
+        device_type = "mps"
+    device = torch.device(device_type) # cuda:0?
+    print(f"Device: {device_type}")
+
+    scaler = GradScaler(device_type)
 
     print()
     print("--- Tensorboard Setup ---")
@@ -391,16 +413,17 @@ def main():
     best_loss = float('inf')
     early_stop = EarlyStopping(PATIENCE)
 
+    print()
     print("--- Load Best Model ---")
-    if os.path.exists(MODEL_PATH):
-        model, optimizer, early_stop = load_model(model, optimizer, early_stop)
+    if os.path.exists(BEST_MODEL_PATH):
+        model, optimizer, early_stop = load_model(model, optimizer, early_stop, device_type)
 
+    print()
     print(f"Batches per epoch: {math.ceil(len(train_data) / BATCH_SIZE)}")
-
     for epoch in range(1, NUM_EPOCHS+1):
         print()
         print(f"\n--- Training Epoch {epoch} ---")
-        model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, writer, device)
+        model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, scaler, writer, device, device_type)
         
         early_stopped, test_loss = evaluate(test_loader, model, criterion, writer, device, early_stop)
 
