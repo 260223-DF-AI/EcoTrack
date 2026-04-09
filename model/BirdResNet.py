@@ -29,14 +29,14 @@ LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
 BEST_MODEL_PATH = "model/weights/best_50.pth"
 NUM_EPOCHS = 10
-LEARNING_RATE_4 = 0.001
-# LEARNING_RATE_4 = 0.00001
+# LEARNING_RATE_4 = 0.001
+LEARNING_RATE_4 = 0.00001
 # LEARNING_RATE_4 = 0.0000001
-LEARNING_RATE_FC = 0.01
-# LEARNING_RATE_FC = 0.0001
+# LEARNING_RATE_FC = 0.01
+LEARNING_RATE_FC = 0.0001
 # LEARNING_RATE_FC = 0.000001
 PATIENCE = 2
-BATCH_SIZE = 64
+BATCH_SIZE = 256
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -204,7 +204,7 @@ def load_model(model, optimizer, early_stop, device_type):
         early_stop.best_loss = best_model["loss"]
         # early_stop_train.best_loss = best_model["train_loss"]
         # early_stop_test.best_loss = best_model["test_loss"]
-        print(f"Loaded best model from {MODEL_PATH}")
+        print(f"Loaded best model from {BEST_MODEL_PATH}")
         # return model, optimizer, early_stop_train, early_stop_test
         return model, optimizer, early_stop
 
