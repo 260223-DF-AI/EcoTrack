@@ -12,18 +12,23 @@ from torch.utils.tensorboard import SummaryWriter # tensorboard --logdir=./runs/
 from torch.amp import autocast, GradScaler
 from torchvision import transforms
 import torchvision.models as models
-
+from sklearn.metrics import confusion_matrix
+import seaborn as sn
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 from PIL import Image
+import io
 
 # Global Variables
 DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
 BEST_MODEL_PATH = "model/weights/best.pth"
-NUM_EPOCHS = 5
+NUM_EPOCHS = 10
 LEARNING_RATE = 0.01
 PATIENCE = 2
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -38,23 +43,23 @@ class BirdResNet(nn.Module):
         # Transfer Learning based on ResNet model
         # Options are 18, 34, 50, 101, and 151
         # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+        # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
         # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
+        self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
         # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
         # Freeze ResNet params
         for param in self.model.parameters():
             param.requires_grad = False
+        for param in self.model.layer4.parameters():
+            param.requires_grad = True
+        # for param in self.model.layer3.parameters():
+        #     param.requires_grad = True
 
         # Replace final fully-connected linear layer with our own to fine-tune
         # Allows us to set our number of output classes
         num_ftrs = self.model.fc.in_features
         self.model.fc = nn.Linear(num_ftrs, num_classes)
-        
-        for name, param in self.model.named_parameters():
-            if "layer4" in name or "fc" in name:
-                param.requires_grad = True
 
     def forward(self, x):
         return self.model(x)
@@ -82,6 +87,41 @@ class BirdDataset(Dataset):
             image = self.transform(image)
         
         return image, label
+
+def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
+    """
+    Evaluate after one epoch
+    """
+    print()
+    print("--- Eval Model ---")
+
+    test_loss, correct, total = 0, 0, 0
+
+    model.eval()
+
+    with torch.no_grad():
+        for batch_idx, (x, y) in enumerate(dataloader, 1):
+            x, y = x.to(device), y.to(device)
+            pred = model(x)
+            batch_size = y.size(0)
+            total += batch_size
+            test_loss += loss_fn(pred, y).item() * batch_size
+            correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
+        
+    test_loss /= total
+
+    should_stop, improved = early_stop(test_loss)
+
+    if improved: #leaving early stop in here for now but it should be initiated by eval first
+        print(f"New best model: Loss = {test_loss:.4f}")
+        
+    writer.add_scalar("Loss/test", test_loss)
+    print("Total Samples: ", total)
+    print("Correct Predictions: ", correct)
+    print(f"Test Loss: {test_loss:.4f}")
+    print(f"Evaluation: Accuracy = {(100 * correct / total):.2f}%")
+
+    return should_stop, test_loss
 
 class EarlyStopping:
     def __init__(self, patience: int = 20):
@@ -254,49 +294,18 @@ def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer,
     print(f"Time taken: {end_time - start_time:.2f} seconds")
     return model, optimizer, best_loss
 
-def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
-    """
-    Evaluate after one epoch
-    """
-    print()
-    print("--- Eval Model ---")
-
-    test_loss, correct, total = 0, 0, 0
-
-    model.eval()
-
-    with torch.no_grad():
-        for batch_idx, (x, y) in enumerate(dataloader, 1):
-            x, y = x.to(device), y.to(device)
-            pred = model(x)
-            batch_size = y.size(0)
-            total += batch_size
-            test_loss += loss_fn(pred, y).item() * batch_size
-            correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
-            # if batch_idx == 100:
-                # print(f"Batch {batch_idx}")
-    
-    test_loss /= total
-
-    should_stop, improved = early_stop(test_loss)
-
-    if improved: #leaving early stop in here for now but it should be initiated by eval first
-        print(f"New best model: Loss = {test_loss:.4f}")
-        
-    writer.add_scalar("Loss/test", test_loss)
-    print("Total Samples: ", total)
-    print("Correct Predictions: ", correct)
-    print(f"Test Loss: {test_loss:.4f}")
-    print(f"Evaluation: Accuracy = {(100 * correct / total):.2f}%")
-
-    return should_stop, test_loss
-
-def validate(dataloader, model, loss_fn, writer, device):
+def validate(dataloader, model, loss_fn, writer, device, classes):
     """
     Evaluate after one epoch
     """
     print()
     print("--- Final Validation ---")
+
+    # initialize variables for confusion matrix
+    correct_pred = {classname: 0 for classname in classes}
+    total_pred = {classname: 0 for classname in classes}
+    all_y_pred = []
+    all_y_true = []
 
     valid_loss, correct, total = 0, 0, 0
 
@@ -306,12 +315,26 @@ def validate(dataloader, model, loss_fn, writer, device):
         for batch_idx, (x, y) in enumerate(dataloader, 1):
             x, y = x.to(device), y.to(device)
             pred = model(x)
+            _, predictions = torch.max(pred, 1) # for confusion matrix
             batch_size = y.size(0)
             total += batch_size
             valid_loss += loss_fn(pred, y).item() * batch_size
             correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
             # if batch_idx == 100:
                 # print(f"Batch {batch_idx}")
+
+            # for confusion matrix
+            all_y_pred.extend(predictions.cpu().numpy())
+            all_y_true.extend(y.cpu().numpy())
+            for label, prediction in zip(y, predictions):
+                if label == prediction:
+                    correct_pred[classes[label]] += 1
+                total_pred[classes[label]] += 1
+    
+    # create the confusion matrix and store it in a dataframe
+    cf_matrix = confusion_matrix(all_y_true, all_y_pred)
+    df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None], index = [i for i in classes],
+                        columns = [i for i in classes])
     
     valid_loss /= total
     
@@ -320,6 +343,8 @@ def validate(dataloader, model, loss_fn, writer, device):
     print("Correct Predictions: ", correct)
     print(f"Valid Loss: {valid_loss:.4f}")
     print(f"Validation: Accuracy = {(100 * correct / total):.2f}%")
+
+    return df_cm
 
 def main():
 
@@ -339,6 +364,8 @@ def main():
     print()
     print("--- Tensorboard Setup ---")
     writer = SummaryWriter(LOG_DIR)
+
+    df_cm = pd.DataFrame()
 
     print()
     print("--- Create DataLoaders ---")
@@ -375,10 +402,13 @@ def main():
     model = BirdResNet(train_data.classes)
     model = model.to(device)
 
-    optimizer = optim.Adam(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=LEARNING_RATE
-    )
+    optimizer = optim.Adam([
+        {'params': filter(lambda p: p.requires_grad, model.model.layer4.parameters()),
+        'lr': 1e-3},
+        {'params': filter(lambda p: p.requires_grad, model.model.fc.parameters()),
+        'lr': LEARNING_RATE}
+    ])
+
     criterion = nn.CrossEntropyLoss()
     best_loss = float('inf')
     early_stop = EarlyStopping(PATIENCE)
@@ -407,7 +437,24 @@ def main():
             }, BEST_MODEL_PATH)
             break
 
-    validate(valid_loader, model, criterion, writer, device)
+    df_cm = validate(valid_loader, model, criterion, writer, device,list(set(train_data.labels)))
+
+    print("Now displaying confusion matrix for last executed epoch")
+    plt.figure(figsize = (8,5))
+    sn.heatmap(df_cm, annot=True)
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    #plt.savefig('bird_confusion_matrix.png')
+    # Save to TensorBoard
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png')
+    plt.show()
+    buf.seek(0)
+    image = Image.open(buf)
+    image_tensor = transforms.ToTensor()(image)
+    writer.add_image('Confusion Matrix', image_tensor)
+    plt.close()
+
 
 if __name__ == "__main__":
     main()

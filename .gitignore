@@ -43,3 +43,4 @@ data/
 model/weights/
 runs/
 test.py
+bird_confusion_matrix.png
