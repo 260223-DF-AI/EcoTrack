@@ -25,9 +25,9 @@ LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
 BEST_MODEL_PATH = "model/weights/best.pth"
 NUM_EPOCHS = 10
-LEARNING_RATE = 0.01
+LEARNING_RATE = 0.00001
 PATIENCE = 2
-BATCH_SIZE = 64
+BATCH_SIZE = 32
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -44,8 +44,8 @@ class BirdResNet(nn.Module):
         # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
         # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
-        # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
+        # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
+        self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
         # Freeze ResNet params
         for param in self.model.parameters():
@@ -382,7 +382,7 @@ def main():
 
     optimizer = optim.Adam([
         {'params': filter(lambda p: p.requires_grad, model.model.layer4.parameters()),
-        'lr': 1e-3},
+        'lr': 1e-7},
         {'params': filter(lambda p: p.requires_grad, model.model.fc.parameters()),
         'lr': LEARNING_RATE}
     ])
@@ -417,7 +417,7 @@ def main():
     df_cm = validate(valid_loader, model, criterion, writer, device,list(set(train_data.labels)))
 
     print("Now displaying confusion matrix for last executed epoch")
-    plt.figure(figsize = (8,5))
+    plt.figure(figsize = (10,7))
     sn.heatmap(df_cm, annot=True)
     plt.ylabel('True label')
     plt.xlabel('Predicted label')
