@@ -44,8 +44,8 @@ class BirdResNet(nn.Module):
         # Options are 18, 34, 50, 101, and 151
         # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
+        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
         # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
         # Freeze ResNet params
@@ -186,11 +186,11 @@ def load_data():
     
     return train_data, train_loader, test_loader, valid_loader
 
-def load_model(model, optimizer, early_stop):
+def load_model(model, optimizer, early_stop, device_type):
         """
         Load best model weights, optimizer state dict, and loss
         """
-        best_model = torch.load(MODEL_PATH, weights_only=True)
+        best_model = torch.load(MODEL_PATH, weights_only=True, map_location=device_type)
         model.load_state_dict(best_model["model_state_dict"])
         optimizer.load_state_dict(best_model["optimizer_state_dict"])
         early_stop.best_loss = best_model["loss"]
@@ -416,7 +416,7 @@ def main():
     print()
     print("--- Load Best Model ---")
     if os.path.exists(BEST_MODEL_PATH):
-        model, optimizer, early_stop = load_model(model, optimizer, early_stop)
+        model, optimizer, early_stop = load_model(model, optimizer, early_stop, device_type)
 
     print()
     print(f"Batches per epoch: {math.ceil(len(train_data) / BATCH_SIZE)}")
