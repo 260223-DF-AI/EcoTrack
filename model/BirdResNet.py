@@ -26,7 +26,12 @@ LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
 BEST_MODEL_PATH = "model/weights/best.pth"
 NUM_EPOCHS = 10
-LEARNING_RATE = 0.01
+LEARNING_RATE_4 = 0.001
+# LEARNING_RATE_4 = 0.00001
+# LEARNING_RATE_4 = 0.0000001
+LEARNING_RATE_FC = 0.01
+# LEARNING_RATE_FC = 0.0001
+# LEARNING_RATE_FC = 0.000001
 PATIENCE = 2
 BATCH_SIZE = 64
 
@@ -404,9 +409,9 @@ def main():
 
     optimizer = optim.Adam([
         {'params': filter(lambda p: p.requires_grad, model.model.layer4.parameters()),
-        'lr': 1e-3},
+        'lr': LEARNING_RATE_4},
         {'params': filter(lambda p: p.requires_grad, model.model.fc.parameters()),
-        'lr': LEARNING_RATE}
+        'lr': LEARNING_RATE_FC}
     ])
 
     criterion = nn.CrossEntropyLoss()
