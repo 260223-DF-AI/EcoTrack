@@ -88,41 +88,6 @@ class BirdDataset(Dataset):
         
         return image, label
 
-def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
-    """
-    Evaluate after one epoch
-    """
-    print()
-    print("--- Eval Model ---")
-
-    test_loss, correct, total = 0, 0, 0
-
-    model.eval()
-
-    with torch.no_grad():
-        for batch_idx, (x, y) in enumerate(dataloader, 1):
-            x, y = x.to(device), y.to(device)
-            pred = model(x)
-            batch_size = y.size(0)
-            total += batch_size
-            test_loss += loss_fn(pred, y).item() * batch_size
-            correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
-        
-    test_loss /= total
-
-    should_stop, improved = early_stop(test_loss)
-
-    if improved: #leaving early stop in here for now but it should be initiated by eval first
-        print(f"New best model: Loss = {test_loss:.4f}")
-        
-    writer.add_scalar("Loss/test", test_loss)
-    print("Total Samples: ", total)
-    print("Correct Predictions: ", correct)
-    print(f"Test Loss: {test_loss:.4f}")
-    print(f"Evaluation: Accuracy = {(100 * correct / total):.2f}%")
-
-    return should_stop, test_loss
-
 class EarlyStopping:
     def __init__(self, patience: int = 20):
         self.patience = patience
@@ -345,6 +310,41 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
     print(f"Validation: Accuracy = {(100 * correct / total):.2f}%")
 
     return df_cm
+
+def evaluate(dataloader, model, loss_fn, writer, device, early_stop):
+    """
+    Evaluate after one epoch
+    """
+    print()
+    print("--- Eval Model ---")
+
+    test_loss, correct, total = 0, 0, 0
+
+    model.eval()
+
+    with torch.no_grad():
+        for batch_idx, (x, y) in enumerate(dataloader, 1):
+            x, y = x.to(device), y.to(device)
+            pred = model(x)
+            batch_size = y.size(0)
+            total += batch_size
+            test_loss += loss_fn(pred, y).item() * batch_size
+            correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
+        
+    test_loss /= total
+
+    should_stop, improved = early_stop(test_loss)
+
+    if improved: #leaving early stop in here for now but it should be initiated by eval first
+        print(f"New best model: Loss = {test_loss:.4f}")
+        
+    writer.add_scalar("Loss/test", test_loss)
+    print("Total Samples: ", total)
+    print("Correct Predictions: ", correct)
+    print(f"Test Loss: {test_loss:.4f}")
+    print(f"Evaluation: Accuracy = {(100 * correct / total):.2f}%")
+
+    return should_stop, test_loss
 
 def main():
 
