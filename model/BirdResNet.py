@@ -23,22 +23,22 @@ import matplotlib.pyplot as plt
 
 from PIL import Image
 
-from species_status import SpeciesStatuses
+from model.species_status import SpeciesStatuses
 
 # Global Variables
 DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
-BEST_MODEL_PATH = "model/weights/best_50.pth"
-NUM_EPOCHS = 10
-# LEARNING_RATE_4 = 0.001
-LEARNING_RATE_4 = 0.00001
-# LEARNING_RATE_4 = 0.0000001
+BEST_MODEL_PATH = "model/weights/best.pth"
+NUM_EPOCHS = 30
+# LEARNING_RATE_4 = 0.0001
+# LEARNING_RATE_4 = 0.00001
+LEARNING_RATE_4 = 0.00000001
 # LEARNING_RATE_FC = 0.01
-LEARNING_RATE_FC = 0.0001
-# LEARNING_RATE_FC = 0.000001
-PATIENCE = 2
-BATCH_SIZE = 32
+# LEARNING_RATE_FC = 0.0001
+LEARNING_RATE_FC = 0.000001
+PATIENCE = 10
+BATCH_SIZE = 64
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -51,11 +51,11 @@ class BirdResNetModel(nn.Module):
         super(BirdResNetModel, self).__init__()
 
         # Transfer Learning based on ResNet model
-        # Options are 18, 34, 50, 101, and 151
+        # Options are 18, 34, 50, 101, and 152
         # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
+        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
         # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
         # Freeze ResNet params
@@ -63,8 +63,8 @@ class BirdResNetModel(nn.Module):
             param.requires_grad = False
         for param in self.model.layer4.parameters():
             param.requires_grad = True
-        # for param in self.model.layer3.parameters():
-        #     param.requires_grad = True
+        for param in self.model.layer3.parameters():
+            param.requires_grad = True
 
         # Replace final fully-connected linear layer with our own to fine-tune
         # Allows us to set our number of output classes
@@ -437,6 +437,8 @@ def main():
     model = model.to(device)
 
     optimizer = optim.Adam([
+        {'params': filter(lambda p: p.requires_grad, model.model.layer3.parameters()),
+        'lr': 0},
         {'params': filter(lambda p: p.requires_grad, model.model.layer4.parameters()),
         'lr': LEARNING_RATE_4},
         {'params': filter(lambda p: p.requires_grad, model.model.fc.parameters()),
@@ -470,7 +472,7 @@ def main():
                 "optimizer_state_dict": optimizer.state_dict(),
                 "loss": test_loss,
             }, BEST_MODEL_PATH)
-            break
+            # break
 
         if early_stopped:
             print(f"No improvements in {PATIENCE} epochs. Ending training early.")
