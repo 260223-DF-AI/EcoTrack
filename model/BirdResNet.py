@@ -29,7 +29,7 @@ from species_status import SpeciesStatuses
 DATA_ROOT = "data/CUB_200_2011/images"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
-BEST_MODEL_PATH = "model/weights/best_50.pth"
+BEST_MODEL_PATH = "model/weights/model101_93p_evalacc.pth"
 NUM_EPOCHS = 10
 # LEARNING_RATE_4 = 0.001
 LEARNING_RATE_4 = 0.00001
@@ -350,11 +350,12 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
             all_y_true.extend(y.cpu().numpy())
             for label, prediction in zip(y, predictions):
                 status = species_statuses[label.item()+1][1]
+                status_p = species_statuses[prediction.item()+1][1]
                 if label == prediction:
                     correct_pred[classes[label.item()]] += 1
                     status_counts[status]["correct"] +=1
                 else:
-                    status_counts[status]["incorrect"] +=1
+                    status_counts[status_p]["incorrect"] +=1
 
                 total_pred[classes[label.item()]] += 1
                 status_counts[status]["total"] +=1
@@ -464,7 +465,7 @@ def main():
     print()
     print(f"Batches per epoch: {math.ceil(len(train_data) / BATCH_SIZE)}")
     for epoch in range(1, NUM_EPOCHS+1):
-        # break # uncomment this to just run validation
+        break # uncomment this to just run validation
         print()
         print(f"\n--- Training Epoch {epoch} ---")
         model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, scaler, writer, device, device_type)
