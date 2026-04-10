@@ -51,11 +51,11 @@ def get_classification(model: BirdResNet, img_content):
 		confidence = float(confidence.item()) * 100
 
 		print(f"{pred_species} is {endangered_status}. Model was {confidence:.2f}% confident.")
-		return pred_species, endangered_status, confidence
+		return pred_species, endangered_status, multi, confidence
 
 if __name__ == "__main__":
 	model = load_model(MODEL_PATH)
 	img_path = input("Enter the path to your image: ")
 	if os.path.exists(img_path):
 		with open(img_path, 'rb') as img_content:
-			x, y, z = get_classification(model, img_path)
+			x, y, z, a = get_classification(model, img_path)

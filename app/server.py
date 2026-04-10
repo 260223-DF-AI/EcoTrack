@@ -43,7 +43,11 @@ async def post_classify_bird(img_file: UploadFile):
         await img_file.close()
         # Raise some error here, probably also want to send an error back to the site as an HTTP status code
         pass
-    pass
+    return {
+        'species' : species,
+        'endangered_status': endangered_status,
+        'confidence': confidence
+    }
 
 @app.post("/analyze")
 def post_analyze():

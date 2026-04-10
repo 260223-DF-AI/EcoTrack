@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 
 from PIL import Image
 
-from model.species_status import SpeciesStatuses
+from species_status import SpeciesStatuses
 
 # Global Variables
 DATA_ROOT = "data/CUB_200_2011/images"
@@ -43,19 +43,19 @@ BATCH_SIZE = 64
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
-class BirdResNetModel(nn.Module):
+class BirdResNet(nn.Module):
     """
     Bird species classification model. Built on pretrained ResNet model.
     """
     def __init__(self, num_classes):
-        super(BirdResNetModel, self).__init__()
+        super(BirdResNet, self).__init__()
 
         # Transfer Learning based on ResNet model
         # Options are 18, 34, 50, 101, and 152
         # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
+        # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
         # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
         # Freeze ResNet params
@@ -433,7 +433,7 @@ def main():
 
     print()
     print("--- Instantiate Model ---")
-    model = BirdResNetModel(train_data.classes)
+    model = BirdResNet(train_data.classes)
     model = model.to(device)
 
     optimizer = optim.Adam([
