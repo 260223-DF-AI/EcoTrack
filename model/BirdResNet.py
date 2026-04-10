@@ -28,9 +28,10 @@ from species_status import SpeciesStatuses
 
 # Global Variables
 DATA_ROOT = "data/CUB_200_2011/images"
+ANIMALS_ROOT = "data/animals"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
-BEST_MODEL_PATH = "model/weights/model101_93p_evalacc.pth"
+BEST_MODEL_PATH = "model/weights/best.pth"
 NUM_EPOCHS = 10
 LEARNING_RATE_4 = 0.001
 # LEARNING_RATE_4 = 0.00001
@@ -52,10 +53,10 @@ class BirdResNet(nn.Module):
 
         # Transfer Learning based on ResNet model
         # Options are 18, 34, 50, 101, and 151
-        # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
         # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
+        # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
         # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
         # Freeze ResNet params
@@ -88,7 +89,7 @@ class BirdDataset(Dataset):
         return len(self.image_paths)
 
     def __getitem__(self, idx):
-        path = f"{DATA_ROOT}/{self.image_paths[idx]}"
+        path = self.image_paths[idx]
         label = self.labels[idx]
 
         image = Image.open(path).convert('RGB')
@@ -136,8 +137,17 @@ def load_data(BATCH_SIZE: int = 32):
             
             if label not in class_images:
                 class_images[label] = []
-            class_images[label].append(path)
-    
+            class_images[label].append(os.path.join(DATA_ROOT, path))
+
+    # Load all animal images for testing
+    class_images[len(class_images)] = [] # should be 200
+    # animal_images = []
+    if os.path.exists(ANIMALS_ROOT):
+        for root, dirs, files in os.walk(ANIMALS_ROOT):
+            for file in files:
+                if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    class_images[200].append(os.path.join(root, file))
+
     # Split each class 80/10/10
     for label in sorted(class_images.keys()):
         paths = class_images[label]
@@ -482,7 +492,7 @@ def main():
     print()
     print(f"Batches per epoch: {math.ceil(len(train_data) / BATCH_SIZE)}")
     for epoch in range(1, NUM_EPOCHS+1):
-        break # uncomment this to just run validation
+        # break # uncomment this to just run validation
         print()
         print(f"\n--- Training Epoch {epoch} ---")
         model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, scaler, writer, device, device_type)
@@ -497,7 +507,6 @@ def main():
                 "optimizer_state_dict": optimizer.state_dict(),
                 "loss": test_loss,
             }, BEST_MODEL_PATH)
-            break
 
         if early_stopped:
             print(f"No improvements in {PATIENCE} epochs. Ending training early.")
