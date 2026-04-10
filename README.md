@@ -56,6 +56,14 @@ According to IUCN as of 4/2/2026
 - [5 Mil Bird Images](https://ieee-dataport.org/documents/lasbird-large-scale-bird-recognition-dataset)
 - [Bird Feature and Location Data](https://onlinelibrary.wiley.com/doi/full/10.1111/ele.13898)
 
+## Non-Bird Resources (#, Endangered/Generic, # Images)
+- [22 Generic Florida Species + Endangered Panther, 100k](https://www.crcv.ucf.edu/research/projects/florida-wildlife-camera-trap-dataset/)
+- [11 Endangered Species, 28k](https://lote-animal.github.io/)
+- [10 Generic Animals, 26k](https://www.kaggle.com/datasets/alessiocorrado99/animals10)
+- [90 Generic Animals, 5.4k](https://www.kaggle.com/datasets/iamsouravbanerjee/animal-image-dataset-90-different-animals?select=animals)
+- [100 Generic Animals, 40k](https://www.scidb.cn/en/detail?dataSetId=e2ebd46cb1304a82bab54a8873cb3004)
+
+
 ## Further Reading
 - [Graph-of-Thought Prompting](https://wandb.ai/sauravmaheshkar/prompting-techniques/reports/Chain-of-thought-tree-of-thought-and-graph-of-thought-Prompting-techniques-explained---Vmlldzo4MzQwNjMx)
 - [ResNet Example 1](https://medium.com/@anglilian/image-classification-with-resnet-pytorch-1e48a4c33905)
@@ -101,3 +109,22 @@ According to IUCN as of 4/2/2026
 2. A **runnable FastAPI service** connecting vision models and LLM prompts.
 3. A **SageMaker Model Registry Entry** confirming your model's versioning.
 4. A **database record** showing the complete "audit trail" for a submitted request.
+
+
+
+#### Possible other species
+201 201.Empty_Forest
+202 202.Empty_Sky
+203 203.Person
+204 204.Deer
+205 205.Fox
+206 206.Bear
+207 207.Squirrel
+208 208.Wolf
+209 209.Coyote
+210 210.Chipmunk
+211 211.Elk
+212 212.Raccoon
+213 213.Oposum
+214 214.Rabbit
+215 215.Frog
