@@ -5,6 +5,7 @@ import math
 import random
 import time
 from datetime import datetime
+import argparse
 
 import torch
 import torch.nn as nn
@@ -31,14 +32,13 @@ LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
 BEST_MODEL_PATH = "model/weights/model101_93p_evalacc.pth"
 NUM_EPOCHS = 10
-# LEARNING_RATE_4 = 0.001
-LEARNING_RATE_4 = 0.00001
+LEARNING_RATE_4 = 0.001
+# LEARNING_RATE_4 = 0.00001
 # LEARNING_RATE_4 = 0.0000001
-# LEARNING_RATE_FC = 0.01
-LEARNING_RATE_FC = 0.0001
+LEARNING_RATE_FC = 0.01
+# LEARNING_RATE_FC = 0.0001
 # LEARNING_RATE_FC = 0.000001
 PATIENCE = 2
-BATCH_SIZE = 32
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -116,7 +116,7 @@ class EarlyStopping:
                 self.early_stop = True
             return self.early_stop, False
 
-def load_data():
+def load_data(BATCH_SIZE: int = 32):
     """
     Create our train and test dataloaders
     """
@@ -214,7 +214,6 @@ def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer,
     """
     Train for one epoch
     """
-    # amp = True
 
     print(f"Using AMP: {amp}")
 
@@ -320,7 +319,7 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
             "correct" : 0,
             "incorrect" : 0,
             "total" : 0,
-            # "accuracy" : 0.0
+            "confidence" : 0.0
         }
 
     # initialize variables for confusion matrix
@@ -337,18 +336,21 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
         for batch_idx, (x, y) in enumerate(dataloader, 1):
             x, y = x.to(device), y.to(device)
             pred = model(x)
+            probabilities = nn.functional.softmax(pred, dim=1)
+            max_probs = torch.max(probabilities, dim=1)[0]
             _, predictions = torch.max(pred, 1) # for confusion matrix
             batch_size = y.size(0)
             total += batch_size
             valid_loss += loss_fn(pred, y).item() * batch_size
             correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
+
             # if batch_idx == 100:
                 # print(f"Batch {batch_idx}")
 
             # for confusion matrix
             all_y_pred.extend(predictions.cpu().numpy())
             all_y_true.extend(y.cpu().numpy())
-            for label, prediction in zip(y, predictions):
+            for label, prediction, prob in zip(y, predictions, max_probs):
                 status = species_statuses[label.item()+1][1]
                 status_p = species_statuses[prediction.item()+1][1]
                 if label == prediction:
@@ -356,23 +358,31 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
                     status_counts[status]["correct"] +=1
                 else:
                     status_counts[status_p]["incorrect"] +=1
+                    status_counts[status_p]["confidence"] += prob
 
                 total_pred[classes[label.item()]] += 1
                 status_counts[status]["total"] +=1
-    
+    incorrect = total - correct
+
     for key, value in status_counts.items():
+        print()
         try:
             accuracy = 100*status_counts[key]["correct"] / status_counts[key]["total"]
         except:
             accuracy = -1
         try:
-            incorrect_p = 100*status_counts[key]["incorrect"] / status_counts[key]["total"]
+            incorrect_p = 100*status_counts[key]["incorrect"] / incorrect
         except:
             incorrect_p = -1
+        try:
+            incorrect_c = 100*status_counts[key]["confidence"] / status_counts[key]["incorrect"]
+        except:
+            incorrect_c = -1
         status_counts[key]["accuracy"] = accuracy
-        print(f"{key}: {accuracy:.2f}%")
-        print(f"{key}: {incorrect_p:.2f}% (wrong class)")
-    
+        print(f"{key}: {accuracy:.2f}% accruacy")
+        print(f"{key}: {incorrect_p:.2f}% of incorrect predictions fell under this category")
+        print(f"{key}: {incorrect_c:.2f}% average confidence of predictions incorrectly identifying this category")
+
     # create the confusion matrix and store it in a dataframe
     cf_matrix = confusion_matrix(all_y_true, all_y_pred)
     df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None], index = [i for i in classes],
@@ -390,6 +400,13 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-b', '--batchsize', type=int, default=32)
+
+    args, _ = parser.parse_known_args()
+    BATCH_SIZE = args.batchsize
+
 
     # Manually set random seed for reproducibility   
     # torch.manual_seed(327)
@@ -413,7 +430,7 @@ def main():
 
     print()
     print("--- Create DataLoaders ---")
-    train_data, train_loader, test_loader, valid_loader = load_data()
+    train_data, train_loader, test_loader, valid_loader = load_data(BATCH_SIZE)
 
     # Test to make sure dataloaders working
     
