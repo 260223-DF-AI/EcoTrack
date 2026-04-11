@@ -3,10 +3,10 @@ import torch
 import torch.nn.functional as functional
 from PIL import Image
 from torchvision import transforms
-from model.species_status import SpeciesStatuses
-from model.BirdResNet import BirdResNet
+from species_status import SpeciesStatuses
+from BirdResNet import BirdResNet
 
-MODEL_PATH = "model/weights/model50_90p_evalacc.pth" 
+MODEL_PATH = "model/weights/model101_96p_validacc.pth" 
 __classes: SpeciesStatuses = SpeciesStatuses()
 
 # Transformations
@@ -21,13 +21,13 @@ std_transform = transforms.Compose([
 ])
 	
 def load_model(model_path: str) -> BirdResNet:
-	"""Loads BirdResNet model or raises an 
+	"""Loads BirdResNet model or raises an exception
 	args:
 		model_path: str - the path of the BirdResNet model to load
 	returns:
 		a BirdResNet model if the path existed and the weights in the path aligns with what is in the model called"""
 	# instantiate model
-	model = BirdResNet(200)
+	model = BirdResNet(201)
 
 	# pull specific model from path
 	if os.path.exists(model_path):
@@ -41,13 +41,23 @@ def load_model(model_path: str) -> BirdResNet:
 	return model
 
 def get_classification(model: BirdResNet, img_content):
+	"""
+	Uses the provided model to classify bird species and their endangered status from an input image
+	args:
+		model: BirdResNet - model to communicate with (to?)
+		img_content: can be a file path or bytes of the image
+	returns:
+		a tuple containing the species identified/predicted, the endangered status, multi, and the model's confidence for its output
+	"""
+	# get the image
 	img = Image.open(img_content).convert("RGB")
+
 
 	with torch.no_grad():
 		out = model(std_transform(img).unsqueeze(0))
-		probabilities = functional.softmax(out, dim=1)
-		confidence, output = torch.max(probabilities, dim=1)
-		pred_species, endangered_status, multi = __classes[output.item() + 1]
+		probabilities = functional.softmax(out, dim=1) # scale probability distribution 
+		confidence, output = torch.max(probabilities, dim=1) # get the highest probability and the label associated with it
+		pred_species, endangered_status, multi = __classes[output.item() + 1] 
 		confidence = float(confidence.item()) * 100
 
 		print(f"{pred_species} is {endangered_status}. Model was {confidence:.2f}% confident.")
@@ -55,7 +65,10 @@ def get_classification(model: BirdResNet, img_content):
 
 if __name__ == "__main__":
 	model = load_model(MODEL_PATH)
-	img_path = input("Enter the path to your image: ")
-	if os.path.exists(img_path):
-		with open(img_path, 'rb') as img_content:
-			x, y, z, a = get_classification(model, img_path)
+	while True:
+		img_path = input("Enter the path to your image: ")
+		if os.path.exists(img_path):
+			with open(img_path, 'rb') as img_content:
+				x, y, z, a = get_classification(model, img_path)
+		else:
+			break

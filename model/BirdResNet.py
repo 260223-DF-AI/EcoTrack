@@ -5,6 +5,7 @@ import math
 import random
 import time
 from datetime import datetime
+import argparse
 
 import torch
 import torch.nn as nn
@@ -27,18 +28,18 @@ from species_status import SpeciesStatuses
 
 # Global Variables
 DATA_ROOT = "data/CUB_200_2011/images"
+ANIMALS_ROOT = "data/animals"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
 BEST_MODEL_PATH = "model/weights/best.pth"
-NUM_EPOCHS = 30
-# LEARNING_RATE_4 = 0.0001
+NUM_EPOCHS = 70
+LEARNING_RATE_4 = 0.001
 # LEARNING_RATE_4 = 0.00001
-LEARNING_RATE_4 = 0.00000001
-# LEARNING_RATE_FC = 0.01
+# LEARNING_RATE_4 = 0.0000001
+LEARNING_RATE_FC = 0.01
 # LEARNING_RATE_FC = 0.0001
-LEARNING_RATE_FC = 0.000001
+# LEARNING_RATE_FC = 0.000001
 PATIENCE = 10
-BATCH_SIZE = 64
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -63,8 +64,8 @@ class BirdResNet(nn.Module):
             param.requires_grad = False
         for param in self.model.layer4.parameters():
             param.requires_grad = True
-        for param in self.model.layer3.parameters():
-            param.requires_grad = True
+        # for param in self.model.layer3.parameters():
+        #     param.requires_grad = True
 
         # Replace final fully-connected linear layer with our own to fine-tune
         # Allows us to set our number of output classes
@@ -88,7 +89,7 @@ class BirdDataset(Dataset):
         return len(self.image_paths)
 
     def __getitem__(self, idx):
-        path = f"{DATA_ROOT}/{self.image_paths[idx]}"
+        path = self.image_paths[idx]
         label = self.labels[idx]
 
         image = Image.open(path).convert('RGB')
@@ -116,7 +117,7 @@ class EarlyStopping:
                 self.early_stop = True
             return self.early_stop, False
 
-def load_data():
+def load_data(BATCH_SIZE: int = 32):
     """
     Create our train and test dataloaders
     """
@@ -136,8 +137,17 @@ def load_data():
             
             if label not in class_images:
                 class_images[label] = []
-            class_images[label].append(path)
-    
+            class_images[label].append(os.path.join(DATA_ROOT, path))
+
+    # Load all animal images for testing
+    class_images[len(class_images)] = [] # should be 200
+    # animal_images = []
+    if os.path.exists(ANIMALS_ROOT):
+        for root, dirs, files in os.walk(ANIMALS_ROOT):
+            for file in files:
+                if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    class_images[200].append(os.path.join(root, file))
+
     # Split each class 80/10/10
     for label in sorted(class_images.keys()):
         paths = class_images[label]
@@ -214,7 +224,6 @@ def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer,
     """
     Train for one epoch
     """
-    # amp = True
 
     print(f"Using AMP: {amp}")
 
@@ -318,8 +327,9 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
     for value in species_statuses.statuses.values():
         status_counts[value] = {
             "correct" : 0,
+            "incorrect" : 0,
             "total" : 0,
-            "accuracy" : 0.0
+            "confidence" : 0.0
         }
 
     # initialize variables for confusion matrix
@@ -336,33 +346,53 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
         for batch_idx, (x, y) in enumerate(dataloader, 1):
             x, y = x.to(device), y.to(device)
             pred = model(x)
+            probabilities = nn.functional.softmax(pred, dim=1)
+            max_probs = torch.max(probabilities, dim=1)[0]
             _, predictions = torch.max(pred, 1) # for confusion matrix
             batch_size = y.size(0)
             total += batch_size
             valid_loss += loss_fn(pred, y).item() * batch_size
             correct += int((pred.argmax(1) == y).type(torch.float).sum().item())
+
             # if batch_idx == 100:
                 # print(f"Batch {batch_idx}")
 
             # for confusion matrix
             all_y_pred.extend(predictions.cpu().numpy())
             all_y_true.extend(y.cpu().numpy())
-            for label, prediction in zip(y, predictions):
+            for label, prediction, prob in zip(y, predictions, max_probs):
                 status = species_statuses[label.item()+1][1]
+                status_p = species_statuses[prediction.item()+1][1]
                 if label == prediction:
                     correct_pred[classes[label.item()]] += 1
                     status_counts[status]["correct"] +=1
+                else:
+                    status_counts[status_p]["incorrect"] +=1
+                    status_counts[status_p]["confidence"] += prob
+
                 total_pred[classes[label.item()]] += 1
                 status_counts[status]["total"] +=1
-    
+    incorrect = total - correct
+
     for key, value in status_counts.items():
+        print()
         try:
             accuracy = 100*status_counts[key]["correct"] / status_counts[key]["total"]
         except:
             accuracy = -1
+        try:
+            incorrect_p = 100*status_counts[key]["incorrect"] / incorrect
+        except:
+            incorrect_p = -1
+        try:
+            incorrect_c = 100*status_counts[key]["confidence"] / status_counts[key]["incorrect"]
+        except:
+            incorrect_c = -1
         status_counts[key]["accuracy"] = accuracy
-        print(f"{key}: {accuracy:.2f}%")
-    
+        print(f"{key}: {accuracy:.2f}% accruacy")
+        print(f"{key}: {incorrect_p:.2f}% of incorrect predictions fell under this category")
+        print(f"{key}: {incorrect_c:.2f}% average confidence of predictions incorrectly identifying this category")
+
     # create the confusion matrix and store it in a dataframe
     cf_matrix = confusion_matrix(all_y_true, all_y_pred)
     df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1)[:, None], index = [i for i in classes],
@@ -380,6 +410,13 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-b', '--batchsize', type=int, default=32)
+
+    args, _ = parser.parse_known_args()
+    BATCH_SIZE = args.batchsize
+
 
     # Manually set random seed for reproducibility   
     # torch.manual_seed(327)
@@ -403,7 +440,7 @@ def main():
 
     print()
     print("--- Create DataLoaders ---")
-    train_data, train_loader, test_loader, valid_loader = load_data()
+    train_data, train_loader, test_loader, valid_loader = load_data(BATCH_SIZE)
 
     # Test to make sure dataloaders working
     
@@ -436,14 +473,23 @@ def main():
     model = BirdResNet(train_data.classes)
     model = model.to(device)
 
-    optimizer = optim.Adam([
-        {'params': filter(lambda p: p.requires_grad, model.model.layer3.parameters()),
-        'lr': 0},
+    # optimizer = optim.Adam([
+    #     # {'params': filter(lambda p: p.requires_grad, model.model.layer3.parameters()),
+    #     # 'lr': 0},
+    #     {'params': filter(lambda p: p.requires_grad, model.model.layer4.parameters()),
+    #     'lr': LEARNING_RATE_4},
+    #     {'params': filter(lambda p: p.requires_grad, model.model.fc.parameters()),
+    #     'lr': LEARNING_RATE_FC}
+    # ])
+
+    optimizer = optim.SGD([
+        # {'params': filter(lambda p: p.requires_grad, model.model.layer3.parameters()),
+        # 'lr': 0},
         {'params': filter(lambda p: p.requires_grad, model.model.layer4.parameters()),
-        'lr': LEARNING_RATE_4},
+        'lr': LEARNING_RATE_4,},
         {'params': filter(lambda p: p.requires_grad, model.model.fc.parameters()),
         'lr': LEARNING_RATE_FC}
-    ])
+    ], momentum= 0.9, weight_decay=0.001)
 
     criterion = nn.CrossEntropyLoss()
     best_loss = float('inf')
@@ -472,7 +518,6 @@ def main():
                 "optimizer_state_dict": optimizer.state_dict(),
                 "loss": test_loss,
             }, BEST_MODEL_PATH)
-            # break
 
         if early_stopped:
             print(f"No improvements in {PATIENCE} epochs. Ending training early.")

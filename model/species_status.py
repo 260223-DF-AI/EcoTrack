@@ -3,7 +3,7 @@
 class SpeciesStatuses():
     def __init__(self):
         self.statuses = {
-            "NE": "NOT EVALUATED",
+            "NE": "NOT EVALUATED", #no birds, using this for non-bird images
             "DD": "DATA DEFICIENT",
             "LC": "LEAST CONCERN",
             "NT": "NEAR THREATENED",
@@ -18,6 +18,7 @@ class SpeciesStatuses():
 
         with open("./model/endangered.txt", "r", encoding="utf-8") as f:
             for line in f:
+                if line[0] == "#": continue
                 _, folder, status = line.replace(',', '').replace('\n', '').split()
                 label, species = folder.replace('_', ' ').split('.')
                 label = int(label)

@@ -1,7 +1,7 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import uvicorn
-from model.BirdResNet import BirdResNet
 from model.check_model import load_model, get_classification
 
 # from .routers import *
@@ -11,7 +11,7 @@ from model.check_model import load_model, get_classification
 
 MODEL_PATH = 'model/weights/model50_90p_evalacc.pth' 
 
-bird_classifier: BirdResNet = load_model(MODEL_PATH)
+bird_classifier = load_model(MODEL_PATH)
 
 app = FastAPI(
     title = "EcoTrack API",
@@ -37,7 +37,7 @@ async def post_classify_bird(img_file: UploadFile):
     ext_start_idx = img_file.filename.rfind('.')
     if(img_file.filename[ext_start_idx + 1:] in img_extensions):
         img_content = img_file.file
-        species, endangered_status, confidence = get_classification(bird_classifier, img_content)
+        species, endangered_status, multi, confidence = get_classification(bird_classifier, img_content)
         await img_file.close()
     else:
         await img_file.close()
@@ -46,6 +46,7 @@ async def post_classify_bird(img_file: UploadFile):
     return {
         'species' : species,
         'endangered_status': endangered_status,
+        'multi': multi,
         'confidence': confidence
     }
 
