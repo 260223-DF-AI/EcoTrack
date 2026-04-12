@@ -9,7 +9,7 @@ from model.check_model import load_model, get_classification
 
 # logger = get_logger(__name__)
 
-MODEL_PATH = 'model/weights/model50_90p_evalacc.pth' 
+MODEL_PATH = 'model/weights/best.pth' 
 
 bird_classifier = load_model(MODEL_PATH)
 
@@ -32,7 +32,7 @@ def get_root():
 
 @app.post("/classify_bird")
 async def post_classify_bird(img_file: UploadFile):
-    print(img_file)
+    # print(img_file)
     img_extensions = ['jpeg', 'jpg', 'png', 'heic']
     ext_start_idx = img_file.filename.rfind('.')
     if(img_file.filename[ext_start_idx + 1:] in img_extensions):
@@ -42,6 +42,7 @@ async def post_classify_bird(img_file: UploadFile):
     else:
         await img_file.close()
         # Raise some error here, probably also want to send an error back to the site as an HTTP status code
+        raise HTTPException(status_code=404, detail="Needs to be an image file type with extensions []")
         pass
     return {
         'species' : species,
