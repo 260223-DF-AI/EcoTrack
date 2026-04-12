@@ -22,7 +22,7 @@ Fine-tuning a torchvision ResNet model to classify bird images among 200 classes
         - Some classes might be families or groups of species and have varying statuses, and require human review. 
 
 ## Limitations
-- Does not seem to be able to classify birds in flight, sometimes unable to recognize it as a bird
+- Does not seem to be able to classify birds in flight, from the few species I have tried comparing images in flight and not in flight with, our model classified most of them as "Not a Bird", sometimes it would be classified as the wrong bird specied, and very rarely would it correctly classified.
 
 
 # Resources
@@ -58,6 +58,7 @@ According to IUCN as of 4/2/2026
 - [Found on GitHub](https://github.com/Moddy2024/Bird-Classification?tab=readme-ov-file)
 - [5 Mil Bird Images](https://ieee-dataport.org/documents/lasbird-large-scale-bird-recognition-dataset)
 - [Bird Feature and Location Data](https://onlinelibrary.wiley.com/doi/full/10.1111/ele.13898)
+- [Big Bird](https://rdm.uq.edu.au/files/6f45329e-eccc-4e1e-afac-8895ee4123ee)
 
 ## Non-Bird Resources (#, Endangered/Generic, # Images)
 - [22 Generic Florida Species + Endangered Panther, 100k](https://www.crcv.ucf.edu/research/projects/florida-wildlife-camera-trap-dataset/)

@@ -32,14 +32,14 @@ ANIMALS_ROOT = "data/animals"
 LOG_DIR = "runs/bird_logs"
 MODEL_PATH = "model/weights/model.pth"
 BEST_MODEL_PATH = "model/weights/best.pth"
-NUM_EPOCHS = 70
-LEARNING_RATE_4 = 0.001
-# LEARNING_RATE_4 = 0.00001
+NUM_EPOCHS = 50
+# LEARNING_RATE_4 = 0.001
+LEARNING_RATE_4 = 0.00001
 # LEARNING_RATE_4 = 0.0000001
-LEARNING_RATE_FC = 0.01
-# LEARNING_RATE_FC = 0.0001
+# LEARNING_RATE_FC = 0.01
+LEARNING_RATE_FC = 0.0001
 # LEARNING_RATE_FC = 0.000001
-PATIENCE = 10
+PATIENCE = 15
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -241,7 +241,7 @@ def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer,
                 # print("Predict")
                 pred = model(x)
                 # print("Loss")
-                loss = loss_fn(pred, y)
+                loss = loss_fn(pred, y)    
             # print("Scale")
             scaler.scale(loss).backward()
             # print("Unscale")
@@ -473,25 +473,16 @@ def main():
     model = BirdResNet(train_data.classes)
     model = model.to(device)
 
-    # optimizer = optim.Adam([
-    #     # {'params': filter(lambda p: p.requires_grad, model.model.layer3.parameters()),
-    #     # 'lr': 0},
-    #     {'params': filter(lambda p: p.requires_grad, model.model.layer4.parameters()),
-    #     'lr': LEARNING_RATE_4},
-    #     {'params': filter(lambda p: p.requires_grad, model.model.fc.parameters()),
-    #     'lr': LEARNING_RATE_FC}
-    # ])
-
-    optimizer = optim.SGD([
+    optimizer = optim.Adam([
         # {'params': filter(lambda p: p.requires_grad, model.model.layer3.parameters()),
         # 'lr': 0},
         {'params': filter(lambda p: p.requires_grad, model.model.layer4.parameters()),
-        'lr': LEARNING_RATE_4,},
+        'lr': LEARNING_RATE_4},
         {'params': filter(lambda p: p.requires_grad, model.model.fc.parameters()),
         'lr': LEARNING_RATE_FC}
-    ], momentum= 0.9, weight_decay=0.001)
+    ])
 
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.075)
     best_loss = float('inf')
     early_stop = EarlyStopping(PATIENCE)
 
@@ -503,13 +494,13 @@ def main():
     print()
     print(f"Batches per epoch: {math.ceil(len(train_data) / BATCH_SIZE)}")
     for epoch in range(1, NUM_EPOCHS+1):
-        # break # uncomment this to just run validation
+        break # uncomment this to just run validation
         print()
         print(f"\n--- Training Epoch {epoch} ---")
         model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, scaler, writer, device, device_type)
         
         improved, early_stopped, test_loss = evaluate(test_loader, model, criterion, writer, device, early_stop)
-
+        # scheduler.step(test_loss)
         if improved:
             print("New best, saving best weights")
             torch.save({

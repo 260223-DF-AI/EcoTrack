@@ -1,12 +1,17 @@
 import os
 import torch
 import torch.nn.functional as functional
+import numpy as np
 from PIL import Image
 from torchvision import transforms
 from species_status import SpeciesStatuses
 from BirdResNet import BirdResNet
+from pytorch_grad_cam import GradCAM
+from pytorch_grad_cam.utils.image import show_cam_on_image
+import cv2
 
-MODEL_PATH = "model/weights/model101_96p_validacc.pth" 
+
+MODEL_PATH = "model/weights/best.pth" 
 __classes: SpeciesStatuses = SpeciesStatuses()
 
 # Transformations
@@ -19,6 +24,29 @@ std_transform = transforms.Compose([
 		std=[0.229, 0.224, 0.225]
 	) 
 ])
+
+def visualize_class_features(model: BirdResNet, img_content):
+    img = Image.open(img_content).convert("RGB")
+    img_tensor = std_transform(img).unsqueeze(0)
+	
+    # for param in model.model.parameters():
+    #     param.requires_grad = True
+    target_layer = model.model.layer4[-1]
+
+    outputs = model(img_tensor)
+    pred_class = outputs.argmax(dim=1).item()
+
+    cam = GradCAM(model=model, target_layers=[target_layer])
+    grayscale_cam = cam(input_tensor=img_tensor)[0]
+
+    img_resized = img.resize((224, 224))
+    rgb_img = np.array(img_resized).astype(np.float32) / 255.0
+
+    visualization = show_cam_on_image(rgb_img, grayscale_cam, use_rgb=True)
+
+    cv2.imshow(f"Grad-CAM (pred: {pred_class})", visualization)
+    cv2.waitKey(0) # You need to click on the window with the image and press "0" to let your code move on
+    cv2.destroyAllWindows()
 	
 def load_model(model_path: str) -> BirdResNet:
 	"""Loads BirdResNet model or raises an exception
@@ -69,6 +97,8 @@ if __name__ == "__main__":
 		img_path = input("Enter the path to your image: ")
 		if os.path.exists(img_path):
 			with open(img_path, 'rb') as img_content:
+				model.eval()
 				x, y, z, a = get_classification(model, img_path)
+				# visualize_class_features(model, img_path) # uncomment if you want to see where/what the model is focusing on
 		else:
 			break
