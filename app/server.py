@@ -1,6 +1,8 @@
-from fastapi import FastAPI, UploadFile, HTTPException
+from fastapi import FastAPI, UploadFile, HTTPException, Request
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 import uvicorn
 from model.check_model import load_model, get_classification
 
@@ -9,7 +11,7 @@ from model.check_model import load_model, get_classification
 
 # logger = get_logger(__name__)
 
-MODEL_PATH = 'model/weights/best.pth' 
+MODEL_PATH = 'model/weights/best50_84p_validacc.pth' 
 
 bird_classifier = load_model(MODEL_PATH)
 
@@ -17,6 +19,10 @@ app = FastAPI(
     title = "EcoTrack API",
     description = "API for EcoTrack interaction"
 )
+
+app.mount('/app/static', StaticFiles(directory='app/static'), name='static')
+
+templates = Jinja2Templates(directory='app/templates')
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,8 +33,9 @@ app.add_middleware(
 )
 
 @app.get("/")
-def get_root():
-    return {"message": "Hello from main"}
+def get_root(request: Request):
+    print(request.url_for("static", path="css/style.css"))
+    return templates.TemplateResponse(request=request, name='home.html', context={"message": "Hello from main"})
 
 @app.post("/classify_bird")
 async def post_classify_bird(img_file: UploadFile):
@@ -42,8 +49,7 @@ async def post_classify_bird(img_file: UploadFile):
     else:
         await img_file.close()
         # Raise some error here, probably also want to send an error back to the site as an HTTP status code
-        raise HTTPException(status_code=404, detail="Needs to be an image file type with extensions []")
-        pass
+        raise HTTPException(status_code=415, detail="Needs to be an image file type with extensions 'jpeg', 'jpg', 'png', or 'heic'")
     return {
         'species' : species,
         'endangered_status': endangered_status,
