@@ -7,6 +7,14 @@
 </head>
 <body>
     <h1>Bird Classifier</h1>
-    <form></form>
+    <form method="POST" action="/classify_bird" enctype="multipart/form-data">
+        <label for="upload-photo">Upload a photo of a bird</label>
+        <input type="file" id="upload-photo" name="img_file" accept="image/jpeg, image/png, image/heic">
+        <br>
+        <button type="submit">Upload</button>
+    </form>
+    <div class="container">
+        {% block content %} {% endblock %}
+    </div>
 </body>
 </html>

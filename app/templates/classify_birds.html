@@ -1,0 +1,6 @@
+{% extends "home.html" %}
+{% block content %} 
+    <p>The image contains {{ result['species'] }} which is {{ result['endangered_status'] }}</p>
+    <p>The model was {{ result['confidence'] }}% confident in its conclusion.</p>
+    <!-- Add a textfield/form here -->
+{% endblock %}

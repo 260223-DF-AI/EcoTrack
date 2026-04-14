@@ -34,11 +34,10 @@ app.add_middleware(
 
 @app.get("/")
 def get_root(request: Request):
-    print(request.url_for("static", path="css/style.css"))
     return templates.TemplateResponse(request=request, name='home.html', context={"message": "Hello from main"})
 
 @app.post("/classify_bird")
-async def post_classify_bird(img_file: UploadFile):
+async def post_classify_bird(request: Request, img_file: UploadFile):
     # print(img_file)
     img_extensions = ['jpeg', 'jpg', 'png', 'heic']
     ext_start_idx = img_file.filename.rfind('.')
@@ -50,12 +49,13 @@ async def post_classify_bird(img_file: UploadFile):
         await img_file.close()
         # Raise some error here, probably also want to send an error back to the site as an HTTP status code
         raise HTTPException(status_code=415, detail="Needs to be an image file type with extensions 'jpeg', 'jpg', 'png', or 'heic'")
-    return {
+    result = {
         'species' : species,
         'endangered_status': endangered_status,
         'multi': multi,
         'confidence': confidence
     }
+    return templates.TemplateResponse(request=request, name='classify_birds.html', context={'result': result})
 
 @app.post("/analyze")
 def post_analyze():

@@ -4,14 +4,15 @@ import torch.nn.functional as functional
 import numpy as np
 from PIL import Image
 from torchvision import transforms
-from species_status import SpeciesStatuses
-from BirdResNet import BirdResNet
+from model.species_status import SpeciesStatuses
+from model.BirdResNet import BirdResNet
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
 import cv2
+from datetime import datetime
 
 
-MODEL_PATH = "model/weights/best.pth" 
+MODEL_PATH = "model/weights/best50_84p_validacc.pth" 
 __classes: SpeciesStatuses = SpeciesStatuses()
 
 # Transformations
@@ -67,6 +68,9 @@ def load_model(model_path: str) -> BirdResNet:
 	else:
 		raise Exception(f"Model path does not exist or you're using a different ResNet version in your bird model than you saved your weights on.")
 	return model
+
+def get_usual_habitat_info():
+	pass
 
 def get_classification(model: BirdResNet, img_content):
 	"""
