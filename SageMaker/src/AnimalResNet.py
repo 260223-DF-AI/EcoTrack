@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, random_split
-from torch.utils.tensorboard import SummaryWriter # tensorboard --logdir=./runs/bird_logs
+from torch.utils.tensorboard import SummaryWriter # tensorboard --logdir=./runs/animal_logs
 from torch.amp import autocast, GradScaler
 from torchvision import transforms
 import torchvision.models as models
@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 
 from PIL import Image
 
-from species_status import SpeciesStatuses
+# from species_status import SpeciesStatuses
 
 # Global Variables
 DATA_ROOT = "animals"
@@ -55,8 +55,8 @@ class AnimalResNet(nn.Module):
         # Transfer Learning based on ResNet model
         # Options are 18, 34, 50, 101, and 152
         # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        # self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
         # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
@@ -317,7 +317,7 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
     """
     print()
     print("--- Final Validation ---")
-
+    """
     species_statuses = SpeciesStatuses()
     status_counts = {}
 
@@ -328,7 +328,7 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
             "total" : 0,
             "confidence" : 0.0
         }
-
+    """
     # initialize variables for confusion matrix
     correct_pred = {classname: 0 for classname in classes}
     total_pred = {classname: 0 for classname in classes}
@@ -358,19 +358,20 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
             all_y_pred.extend(predictions.cpu().numpy())
             all_y_true.extend(y.cpu().numpy())
             for label, prediction, prob in zip(y, predictions, max_probs):
-                status = species_statuses[label.item()+1][1]
-                status_p = species_statuses[prediction.item()+1][1]
+                # status = species_statuses[label.item()+1][1]
+                # status_p = species_statuses[prediction.item()+1][1]
                 if label == prediction:
                     correct_pred[classes[label.item()]] += 1
-                    status_counts[status]["correct"] +=1
-                else:
-                    status_counts[status_p]["incorrect"] +=1
-                    status_counts[status_p]["confidence"] += prob
+                    # status_counts[status]["correct"] +=1
+                # else:
+                    # status_counts[status_p]["incorrect"] +=1
+                    # status_counts[status_p]["confidence"] += prob
 
-                total_pred[classes[label.item()]] += 1
-                status_counts[status]["total"] +=1
-    incorrect = total - correct
+                # total_pred[classes[label.item()]] += 1
+                # status_counts[status]["total"] +=1
+    # incorrect = total - correct
 
+    """
     for key, value in status_counts.items():
         print()
         try:
@@ -389,6 +390,7 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
         print(f"{key}: {accuracy:.2f}% accruacy")
         print(f"{key}: {incorrect_p:.2f}% of incorrect predictions fell under this category")
         print(f"{key}: {incorrect_c:.2f}% average confidence of predictions incorrectly identifying this category")
+    """
 
     # create the confusion matrix and store it in a dataframe
     cf_matrix = confusion_matrix(all_y_true, all_y_pred)

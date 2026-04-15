@@ -1,0 +1,90 @@
+antelope, LC
+badger, LC, VU
+bat, LC, VU, EN
+bear, LC, VU
+bee, LC, NT, VU
+beetle, LC, NT
+bison, NT
+boar, LC
+butterfly, LC
+cat, LC
+caterpillar, LC, VU, EN
+chimpanzee, EN, CR
+cockroach, LC
+cow, LC
+coyote, LC
+crab, LC, EN
+crow, LC
+deer, LC
+dog, LC
+dolphin, LC, NT, EN
+donkey, LC
+dragonfly, LC
+duck, LC
+eagle, NT, EN
+elephant, EN, CR
+flamingo, LC, NT, VU
+fly, LC, VU, EN
+fox, LC, NT, EN
+goat, LC, VU, EN, CR
+goldfish, LC
+goose, LC
+gorilla, CR
+grasshopper, LC, NT, VU, EN, CR
+hamster, LC, NT, VU, EN, CR
+hare, LC, EN, CR
+hedgehog, LC, VU
+hippopotamus, VU, CR, RE
+hornbill, VU, EN, CR
+horse, LC
+hummingbird, LC, NT, VU
+hyena, LC
+jellyfish, LC
+kangaroo, LC
+koala, VU
+ladybugs, LC
+leopard, LC, , NT, VU, EN
+lion, VU, CR, RE
+lizard, LC, NT
+lobster, LC, VU
+mosquito, LC
+moth, EN, CR
+mouse, LC
+octopus, LC
+okapi, EN
+orangutan, CR
+otter, LC, NT, VU, EN
+owl, LC, NT, VU
+ox, LC, VU, CR
+oyster, LC
+panda, EN, CR
+parrot, LC, NT, VU, EN, CR
+pelicans, LC, NT
+penguin, LC, NT, VU
+pig, LC, NT, VU, CR
+pigeon, LC
+porcupine, LC
+possum, LC, NT
+raccoon, LC, NT, CR
+rat, LC
+reindeer, VU
+rhinoceros, NT, CR
+sandpiper, NT, CR
+seahorse, LC, NT
+seal, LC, NT, EN
+shark, LC, NT, VU, CR
+sheep, LC
+snake, LC, EN, CR
+sparrow, LC
+squid, DD, NT
+squirrel, LC
+starfish, CR
+swan, LC
+tiger, EN, RE
+turkey, LC
+turtle, LC, VU, EN, CR
+whale, LC, CR
+wolf, LC, CR
+wombat, LC, CR
+woodpecker, LC, VU, EN
+zebra, LC, NT

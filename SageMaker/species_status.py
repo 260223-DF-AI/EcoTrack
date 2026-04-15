@@ -1,7 +1,8 @@
-
+import os
 
 class SpeciesStatuses():
-    def __init__(self):
+    def __init__(self, cautious: bool = True):
+        """If cautious set to True, the worst status in endangered.txt will be assumed. False will assumed best status"""
         self.statuses = {
             "NE": "NOT EVALUATED", #no birds, using this for non-bird images
             "DD": "DATA DEFICIENT",
@@ -10,23 +11,21 @@ class SpeciesStatuses():
             "VU": "VULNERABLE",
             "EN": "ENDANGERED",
             "CR": "CRITICALLY ENDANGERED",
+            "RE": "REGIONALLY EXTINCT",
             "EW": "EXTINCT IN THE WILD",
             "EX": "EXTINCT"
         }
 
         self.species = {}
 
-        with open("./model/endangered.txt", "r", encoding="utf-8") as f:
-            for line in f:
+        with open("./SageMaker/endangered.txt", "r", encoding="utf-8") as f:
+            for idx, line in enumerate(f):
                 if line[0] == "#": continue
-                _, folder, status = line.replace(',', '').replace('\n', '').split()
-                label, species = folder.replace('_', ' ').split('.')
-                label = int(label)
-                multi = '*' in status
-                status = status.replace('*', '')
-                self.species[label] = (species, self.statuses[status], multi)
-                # print(label, species, status, multi)
-                
+                animal = line.replace(',', '').replace('\n', '').split()
+                label = animal[0]
+                status = animal[1:]
+                caution = -1 if cautious else 0
+                self.species[idx] = (label, status, self.statuses[status[caution]])                
 
     def __getitem__(self, label: int):
         """
@@ -42,7 +41,8 @@ class SpeciesStatuses():
         if len(self.species) < label:
             return None
         return self.species[label]
+
     
 if __name__ == "__main__":
     species_statuses = SpeciesStatuses()
-    print(species_statuses[10])
+    print(species_statuses[0])

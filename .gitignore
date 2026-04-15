@@ -42,6 +42,8 @@ logs/*
 data/
 animals/
 model/weights/
+*.pth
 runs/
 test.py
+test/
 bird_confusion_matrix.png
