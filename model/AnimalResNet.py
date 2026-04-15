@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader, random_split
-from torch.utils.tensorboard import SummaryWriter # tensorboard --logdir=./runs/bird_logs
+from torch.utils.tensorboard import SummaryWriter # tensorboard --logdir=./runs/animal_logs
 from torch.amp import autocast, GradScaler
 from torchvision import transforms
 import torchvision.models as models
@@ -27,29 +27,30 @@ from PIL import Image
 from model.species_status import SpeciesStatuses
 
 # Global Variables
-DATA_ROOT = "data/CUB_200_2011/images"
-ANIMALS_ROOT = "data/animals"
-LOG_DIR = "runs/bird_logs"
+DATA_ROOT = "animals"
+# ANIMALS_ROOT = "data/animals"
+LOG_DIR = "runs/animal_logs"
 MODEL_PATH = "model/weights/model.pth"
 BEST_MODEL_PATH = "model/weights/best.pth"
 NUM_EPOCHS = 100
-LEARNING_RATE_4 = 0.001
-# LEARNING_RATE_4 = 0.00001
+BATCH_SIZE = 32
+# LEARNING_RATE_4 = 0.001
+LEARNING_RATE_4 = 0.00001
 # LEARNING_RATE_4 = 0.0000001
-LEARNING_RATE_FC = 0.01
-# LEARNING_RATE_FC = 0.0001
+# LEARNING_RATE_FC = 0.01
+LEARNING_RATE_FC = 0.0001
 # LEARNING_RATE_FC = 0.000001
 PATIENCE = 20
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
 
-class BirdResNet(nn.Module):
+class AnimalResNet(nn.Module):
     """
     Bird species classification model. Built on pretrained ResNet model.
     """
     def __init__(self, num_classes):
-        super(BirdResNet, self).__init__()
+        super(AnimalResNet, self).__init__()
 
         # Transfer Learning based on ResNet model
         # Options are 18, 34, 50, 101, and 152
@@ -75,22 +76,23 @@ class BirdResNet(nn.Module):
     def forward(self, x):
         return self.model(x)
 
-class BirdDataset(Dataset):
+class AnimalDataset(Dataset):
     """
-    Bird image dataset
+    Animal image dataset
     """
-    def __init__(self, image_paths: list[str], labels: list[int], transform=None):
+    def __init__(self, image_paths: list[str], labels: list[str], transform=None):
         self.image_paths = image_paths
         self.labels = labels
         self.transform = transform
-        self.classes = len(set(labels))
+        self.num_classes = len(set(labels))
+        self.classes = list(range(self.num_classes))
 
     def __len__(self):
         return len(self.image_paths)
 
     def __getitem__(self, idx):
         path = self.image_paths[idx]
-        label = self.labels[idx]
+        label = self.classes.index(self.labels[idx]) #convert from string to numerical value
 
         image = Image.open(path).convert('RGB')
 
@@ -117,7 +119,7 @@ class EarlyStopping:
                 self.early_stop = True
             return self.early_stop, False
 
-def load_data(BATCH_SIZE: int = 32):
+def load_data(batch_size: int = 128):
     """
     Create our train and test dataloaders
     """
@@ -129,27 +131,22 @@ def load_data(BATCH_SIZE: int = 32):
 
     # Read all images and group by folder/class
     class_images = {}
-    with open("./data/CUB_200_2011/images.txt", 'r', encoding='utf-8') as f:
-        for line in f:
-            _, path = line.replace('\n', '').split()
-            folder = path.split('/')[0]
-            label = int(folder[:3]) - 1
-            
-            if label not in class_images:
+    for root, dirs, files in os.walk(DATA_ROOT):
+        for label in dirs:
+            if label not in class_images.keys():
                 class_images[label] = []
-            class_images[label].append(os.path.join(DATA_ROOT, path))
-
-    # Load all animal images for testing
-    class_images[len(class_images)] = [] # should be 200
-    # animal_images = []
-    if os.path.exists(ANIMALS_ROOT):
-        for root, dirs, files in os.walk(ANIMALS_ROOT):
-            for file in files:
-                if file.lower().endswith(('.png', '.jpg', '.jpeg')):
-                    class_images[200].append(os.path.join(root, file))
+        
+        # Extract label from the current directory path
+        label = os.path.basename(root)
+        if label not in class_images:
+            class_images[label] = []
+        
+        for file in files:
+            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                class_images[label].append(os.path.join(root, file))
 
     # Split each class 80/10/10
-    for label in sorted(class_images.keys()):
+    for i, label in enumerate(class_images.keys()):
         paths = class_images[label]
         random.shuffle(paths)
         
@@ -157,13 +154,13 @@ def load_data(BATCH_SIZE: int = 32):
         test_count = math.ceil(len(paths) * 0.1)
         
         train_paths.extend(paths[:train_count])
-        train_labels.extend([label] * train_count)
+        train_labels.extend([i] * train_count)
         
         test_paths.extend(paths[train_count:train_count + test_count])
-        test_labels.extend([label] * test_count)
+        test_labels.extend([i] * test_count)
         
         valid_paths.extend(paths[train_count + test_count:])
-        valid_labels.extend([label] * (len(paths) - train_count - test_count))
+        valid_labels.extend([i] * (len(paths) - train_count - test_count))
 
                 
     # Standardize our image sizes for the model, while applying random transformations to strengthen model accuracy
@@ -191,18 +188,18 @@ def load_data(BATCH_SIZE: int = 32):
     ])
 
     # Create dataset objects
-    train_data = BirdDataset(train_paths, train_labels, transform=train_transform)
-    test_data = BirdDataset(test_paths, test_labels, transform=std_transform)
-    valid_data = BirdDataset(valid_paths, valid_labels, transform=std_transform)
+    train_data = AnimalDataset(train_paths, train_labels, transform=train_transform)
+    test_data = AnimalDataset(test_paths, test_labels, transform=std_transform)
+    valid_data = AnimalDataset(valid_paths, valid_labels, transform=std_transform)
 
     # Create dataloaders
-    train_loader = DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
-    test_loader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=False) #batch size won't matter if running through all data
-    valid_loader = DataLoader(valid_data, batch_size=BATCH_SIZE, shuffle=False)
+    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False) #batch size won't matter if running through all data
+    valid_loader = DataLoader(valid_data, batch_size=batch_size, shuffle=False)
 
-    print(f"Train data count: {len(train_data)}; Classes: {train_data.classes}")
-    print(f"Test data count: {len(test_data)}; Classes: {test_data.classes}")
-    print(f"Valid data count: {len(valid_data)}; Classes: {valid_data.classes}")
+    print(f"Train data count: {len(train_data)}; Classes: {train_data.num_classes}")
+    print(f"Test data count: {len(test_data)}; Classes: {test_data.num_classes}")
+    print(f"Valid data count: {len(valid_data)}; Classes: {valid_data.num_classes}")
     
     return train_data, train_loader, test_loader, valid_loader
 
@@ -271,7 +268,7 @@ def train_loop(dataloader, model, loss_fn, best_loss, optimizer, scaler, writer,
                 "loss": loss.item(),
             }, MODEL_PATH)
         
-        if batch_idx % 100 == 0:
+        if batch_idx % 10 == 0:
             print(f"Batch {batch_idx}")
     
     end_time = time.time()
@@ -412,15 +409,15 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-b', '--batchsize', type=int, default=32)
+    parser.add_argument('-b', '--batchsize', type=int, default=BATCH_SIZE)
 
     args, _ = parser.parse_known_args()
-    BATCH_SIZE = args.batchsize
+    batch_size = args.batchsize
 
 
     # Manually set random seed for reproducibility   
-    # torch.manual_seed(327)
-    # torch.backends.cudnn.deterministic = True
+    torch.manual_seed(327)
+    torch.backends.cudnn.deterministic = True
 
     # Identify best device to train on
     device_type = "cuda" if torch.cuda.is_available() else "cpu"
@@ -434,43 +431,17 @@ def main():
     print()
     print("--- Tensorboard Setup ---")
     run_name = datetime.now().strftime("%Y%m%d-%H%M%S")
-    writer = SummaryWriter(f"runs/bird_logs/{run_name}")
+    writer = SummaryWriter(f"{LOG_DIR}/{run_name}")
 
     df_cm = pd.DataFrame()
 
     print()
     print("--- Create DataLoaders ---")
-    train_data, train_loader, test_loader, valid_loader = load_data(BATCH_SIZE)
-
-    # Test to make sure dataloaders working
-    
-    """
-    # Random training example
-    rand_idx = torch.randint(0, len(train_data), (1,)).item()
-    sample_img, sample_label = train_data[rand_idx]
-    sample_path = train_data.image_paths[rand_idx]
-    # Log random sample to TensorBoard
-    mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
-    std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
-
-    sample_img_tb = (sample_img * std + mean).clamp(0, 1)
-
-    writer.add_image("Samples/RandomTrain/Image", sample_img_tb, 0)
-    writer.add_text("Samples/RandomTrain/Path", sample_path, 0)
-    writer.add_text("Samples/RandomTrain/Label", str(sample_label), 0)
-    writer.flush()
-
-    print()
-    print("--- Random Train Sample ---")
-    print(f"Index: {rand_idx}")
-    print(f"Path: {sample_path}")
-    print(f"Label: {sample_label}")
-    print(f"Image tensor shape: {tuple(sample_img.shape)}")
-    """
+    train_data, train_loader, test_loader, valid_loader = load_data(batch_size)
 
     print()
     print("--- Instantiate Model ---")
-    model = BirdResNet(train_data.classes)
+    model = AnimalResNet(train_data.num_classes)
     model = model.to(device)
 
     optimizer = optim.Adam([
@@ -492,9 +463,9 @@ def main():
         model, optimizer, early_stop = load_model(model, optimizer, early_stop, device_type)
 
     print()
-    print(f"Batches per epoch: {math.ceil(len(train_data) / BATCH_SIZE)}")
+    print(f"Batches per epoch: {math.ceil(len(train_data) / batch_size)}")
     for epoch in range(1, NUM_EPOCHS+1):
-        # break # uncomment this to just run validation
+        break # uncomment this to just run validation
         print()
         print(f"\n--- Training Epoch {epoch} ---")
         model, optimizer, best_loss = train_loop(train_loader, model, criterion, best_loss, optimizer, scaler, writer, device, device_type)

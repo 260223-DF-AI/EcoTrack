@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, HTTPException, Request
+from fastapi import FastAPI, UploadFile, HTTPException, Request, Form
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -11,7 +11,7 @@ from model.check_model import load_model, get_classification
 
 # logger = get_logger(__name__)
 
-MODEL_PATH = 'model/weights/best50_84p_validacc.pth' 
+MODEL_PATH = 'model/weights/best50_93p_validacc.pth' 
 
 bird_classifier = load_model(MODEL_PATH)
 
@@ -36,9 +36,10 @@ app.add_middleware(
 def get_root(request: Request):
     return templates.TemplateResponse(request=request, name='home.html', context={"message": "Hello from main"})
 
-@app.post("/classify_bird")
-async def post_classify_bird(request: Request, img_file: UploadFile):
-    # print(img_file)
+@app.post("/classify_animal")
+async def post_classify_bird(request: Request, img_file: UploadFile, additional_info: str=Form()):
+    """Don't forget to write your doc comment, Isabelle"""
+    print(additional_info)
     img_extensions = ['jpeg', 'jpg', 'png', 'heic']
     ext_start_idx = img_file.filename.rfind('.')
     if(img_file.filename[ext_start_idx + 1:] in img_extensions):
@@ -47,18 +48,19 @@ async def post_classify_bird(request: Request, img_file: UploadFile):
         await img_file.close()
     else:
         await img_file.close()
-        # Raise some error here, probably also want to send an error back to the site as an HTTP status code
+        # Raise an error with status code 415
         raise HTTPException(status_code=415, detail="Needs to be an image file type with extensions 'jpeg', 'jpg', 'png', or 'heic'")
+    
     result = {
         'species' : species,
         'endangered_status': endangered_status,
         'multi': multi,
         'confidence': confidence
     }
-    return templates.TemplateResponse(request=request, name='classify_birds.html', context={'result': result})
+    return templates.TemplateResponse(request=request, name='classify_animal.html', context={'result': result})
 
 @app.post("/analyze")
-def post_analyze():
+def post_analyze(request: Request, img_result, additional_info: str):
     pass
 
 def start_server():
@@ -66,3 +68,4 @@ def start_server():
     Launch API server with uvicorn
     """
     uvicorn.run("app.server:app", host="localhost", port=8000, reload=True)
+

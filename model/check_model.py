@@ -5,14 +5,15 @@ import numpy as np
 from PIL import Image
 from torchvision import transforms
 from model.species_status import SpeciesStatuses
-from model.BirdResNet import BirdResNet
+from model.AnimalResNet import AnimalResNet
+from model.llm import animal_loc_analysis
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
 import cv2
 from datetime import datetime
 
 
-MODEL_PATH = "model/weights/best50_84p_validacc.pth" 
+MODEL_PATH = "model/weights/best50_93p_validacc.pth" 
 __classes: SpeciesStatuses = SpeciesStatuses()
 
 # Transformations
@@ -26,7 +27,7 @@ std_transform = transforms.Compose([
 	) 
 ])
 
-def visualize_class_features(model: BirdResNet, img_content):
+def visualize_class_features(model: AnimalResNet, img_content):
     img = Image.open(img_content).convert("RGB")
     img_tensor = std_transform(img).unsqueeze(0)
 	
@@ -49,14 +50,14 @@ def visualize_class_features(model: BirdResNet, img_content):
     cv2.waitKey(0) # You need to click on the window with the image and press "0" to let your code move on
     cv2.destroyAllWindows()
 	
-def load_model(model_path: str) -> BirdResNet:
+def load_model(model_path: str) -> AnimalResNet:
 	"""Loads BirdResNet model or raises an exception
 	args:
 		model_path: str - the path of the BirdResNet model to load
 	returns:
 		a BirdResNet model if the path existed and the weights in the path aligns with what is in the model called"""
 	# instantiate model
-	model = BirdResNet(201)
+	model = AnimalResNet(90)
 
 	# pull specific model from path
 	if os.path.exists(model_path):
@@ -72,7 +73,7 @@ def load_model(model_path: str) -> BirdResNet:
 def get_usual_habitat_info():
 	pass
 
-def get_classification(model: BirdResNet, img_content):
+def get_classification(model: AnimalResNet, img_content):
 	"""
 	Uses the provided model to classify bird species and their endangered status from an input image
 	args:
