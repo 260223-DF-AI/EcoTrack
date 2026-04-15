@@ -47,3 +47,5 @@ runs/
 test.py
 test/
 bird_confusion_matrix.png
+local_model/
+*.tar.gz

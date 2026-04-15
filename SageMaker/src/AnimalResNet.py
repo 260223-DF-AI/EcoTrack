@@ -47,16 +47,19 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 class AnimalResNet(nn.Module):
     """
-    Bird species classification model. Built on pretrained ResNet model.
+    Animal species classification model. Built on pretrained ResNet model.
     """
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, pretrained: bool = True):
         super(AnimalResNet, self).__init__()
 
         # Transfer Learning based on ResNet model
         # Options are 18, 34, 50, 101, and 152
         # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        if pretrained:
+            self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        else:
+            self.model = models.resnet50(weights=None)
         # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
         # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
@@ -65,8 +68,6 @@ class AnimalResNet(nn.Module):
             param.requires_grad = False
         for param in self.model.layer4.parameters():
             param.requires_grad = True
-        # for param in self.model.layer3.parameters():
-        #     param.requires_grad = True
 
         # Replace final fully-connected linear layer with our own to fine-tune
         # Allows us to set our number of output classes
