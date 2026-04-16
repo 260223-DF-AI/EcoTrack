@@ -26,9 +26,9 @@ class SpeciesStatuses():
                 if line[0] == "#" or line == '': continue
                 animal = line.replace(',', '').replace('\n', '').split()
                 label = animal[1]
-                status = animal[2:]
+                statuses = animal[2:]
                 caution = -1 if cautious else 0
-                self.species[idx] = (label, status, self.statuses[status[caution]])                
+                self.species[idx] = (label, statuses, self.statuses[status[caution]])                
                 # print(self.species[idx])
 
     def __getitem__(self, label: int):

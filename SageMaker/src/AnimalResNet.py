@@ -24,7 +24,6 @@ import matplotlib.pyplot as plt
 
 from PIL import Image
 
-
 # Global Variables
 DATA_ROOT = "animals"
 # ANIMALS_ROOT = "data/animals"

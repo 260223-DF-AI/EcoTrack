@@ -33,7 +33,7 @@ def main():
                 exit(1)
 
             input_data = std_transform(img).unsqueeze(0)
-            predictor, confidence, label = predict(predictor, input_data)
+            confidence, label = predict(predictor, input_data)
             print(f"Class: {species_statuses[label]}, %{confidence:.2f} confidence.")
     except Exception as e:
         print(e)
