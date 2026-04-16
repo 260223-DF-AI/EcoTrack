@@ -51,7 +51,9 @@ def model_fn(model_dir: str):
 
     # Infer class count from the checkpoint so the inference head matches training.
     fc_weight = state_dict.get("model.fc.weight")
+    print(f"FC Weight: {fc_weight}")
     num_classes = int(fc_weight.shape[0]) if fc_weight is not None else 90
+    print(num_classes)
 
     model = AnimalResNet(num_classes=num_classes, pretrained=False)
     model.load_state_dict(state_dict)

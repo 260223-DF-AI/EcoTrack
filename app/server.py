@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
-from model.check_model import load_model, get_classification
+from SageMaker.check_model import load_model, get_classification
 
 # from .routers import *
 # from .utils.logger import get_logger, log_execution

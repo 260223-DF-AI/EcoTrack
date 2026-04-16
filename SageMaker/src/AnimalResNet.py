@@ -133,13 +133,9 @@ def load_data(batch_size: int = 128):
     # Read all images and group by folder/class
     class_images = {}
     for root, dirs, files in os.walk(DATA_ROOT):
-        for label in dirs:
-            if label not in class_images.keys():
-                class_images[label] = []
-        
-        # Extract label from the current directory path
+        if root == "animals": continue
         label = os.path.basename(root)
-        if label not in class_images:
+        if label not in list(class_images.keys()):
             class_images[label] = []
         
         for file in files:
@@ -147,7 +143,7 @@ def load_data(batch_size: int = 128):
                 class_images[label].append(os.path.join(root, file))
 
     # Split each class 80/10/10
-    for i, label in enumerate(class_images.keys()):
+    for i, label in enumerate(list(class_images.keys())):
         paths = class_images[label]
         random.shuffle(paths)
         
