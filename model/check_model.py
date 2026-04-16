@@ -70,6 +70,10 @@ def load_model(model_path: str) -> AnimalResNet:
 		raise Exception(f"Model path does not exist or you're using a different ResNet version in your bird model than you saved your weights on.")
 	return model
 
+def reasoning_action_loop(model: AnimalResNet, img_content, additional_info):
+	# de
+	pass
+
 def get_usual_habitat_info():
 	pass
 
@@ -104,6 +108,12 @@ if __name__ == "__main__":
 			with open(img_path, 'rb') as img_content:
 				model.eval()
 				x, y, z, a = get_classification(model, img_path)
+				result = {
+					'species' : x,
+					'endangered_status': y,
+					'multi': z,
+					'confidence': a
+				}
 				# visualize_class_features(model, img_path) # uncomment if you want to see where/what the model is focusing on
 		else:
 			break

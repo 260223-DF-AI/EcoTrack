@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from model.llm import animal_loc_analysis
 from model.check_model import load_model, get_classification
 
 # from .routers import *
@@ -37,7 +38,7 @@ def get_root(request: Request):
     return templates.TemplateResponse(request=request, name='home.html', context={"message": "Hello from main"})
 
 @app.post("/classify_animal")
-async def post_classify_bird(request: Request, img_file: UploadFile, additional_info: str=Form()):
+async def post_classify_animal(request: Request, img_file: UploadFile, additional_info: str=Form()):
     """Don't forget to write your doc comment, Isabelle"""
     print(additional_info)
     img_extensions = ['jpeg', 'jpg', 'png', 'heic']
@@ -59,8 +60,8 @@ async def post_classify_bird(request: Request, img_file: UploadFile, additional_
     }
 
     if endangered_status == "ENDANGERED" or endangered_status == 'CRITICALLY ENDANGERED':
-        if len(additional_info) > MAX_CHARS:
-            raise # Find some specific error to raise. Preferable an http one with a status code
+        evalutation = animal_loc_analysis(result, additional_info=additional_info)
+        result['unusual_location'] = evalutation['unusual_location']
     return templates.TemplateResponse(request=request, name='classify_animal.html', context={'result': result})
 
 @app.post("/analyze")
