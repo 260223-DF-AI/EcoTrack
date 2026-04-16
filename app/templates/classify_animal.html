@@ -1,6 +1,6 @@
 {% extends "home.html" %}
 {% block content %} 
-    <p>The image contains {{ result['species'] }} which is {{ result['endangered_status'] }}
+    <p>The image contains {{ result['species'] }}, most critical conservation status is {{ result['endangered_status'] }}
     {% if result['endangered_status'] == 'ENDANGERED' or result['endangered_status'] == 'CRITICALLY ENDANGERED' %}
         and is
         {% if result['unusual_location'] == True %}

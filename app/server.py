@@ -119,9 +119,17 @@ async def post_classify_animal(request: Request, img_file: UploadFile, additiona
         'confidence': confidence
     }
 
+    # get most critical status of an animal
+    endangered_status = endangered_status[-1]
+    # get the status from the abreviation
+    endangered_status = species_statuses.statuses[endangered_status]
+    # update value in dictionary
+    result['endangered_status'] = endangered_status
+
     if endangered_status in ['ENDANGERED', 'CRITICALLY ENDANGERED', 'REGIONALLY']:
         evalutation = animal_loc_analysis(result, additional_info=additional_info)
         result['unusual_location'] = evalutation['unusual_location']
+
     return templates.TemplateResponse(request=request, name='classify_animal.html', context={'result': result})
 
 def start_server():
