@@ -21,6 +21,21 @@ KEY = os.getenv('GEMINI_API_KEY')
 IN_CONTEXT = """You are using a ReAct loop using a Graph of Thought paradigm to 
 determine if a given endangered animal is in an unusual location based on a description provided."""
 OUT_FORMAT = "{'unusual_location': True or False, 'reason': '', 'confidence': 0-100}" # desired output format
+RESPONSE_FORMAT = {"type": "object",
+                   "properties": {
+                        'unusual_location': {
+                            "type": "boolean",
+                        }, 
+                        'reason': {
+                            "type": "string",
+                        }, 
+                        'confidence': {
+                            "type": "number",
+                            "minimum": 0.0,
+                            "maximum": 100.0,
+                        }
+                    }, "required": ["unusual_location", "confidence", "reason"]
+                }
 INJECTION_PATTERNS = [
     r"ignore (all |your )?(previous |prior )?instructions",
     r"you are now",
@@ -84,7 +99,7 @@ def animal_loc_analysis(class_pred: dict, additional_info: str):
     additional_info = preprocess_uinput(additional_info)
     prompt = f"""{IN_CONTEXT}
 
-Output as a string enclosed in double quotes and strictly adhere to this format (put your entire Graph of Thought process into the 'reason' section):
+Output as a string enclosed in double quotes only and strictly adhere to this format (put your entire Graph of Thought process into the 'reason' section):
 {OUT_FORMAT}
 
 The species detected in the image:
@@ -97,15 +112,18 @@ Additional information/context provided by user:
 """
     
     response = client.models.generate_content(
-        model="gemini-3-flash-preview", 
+        # model="gemini-3-flash-preview",
+        model="gemini-2.5-flash-lite", 
         contents=prompt,
         config={
+            "response_mime_type": "application/json",
+            "response_schema": RESPONSE_FORMAT,
             'temperature': 0.0,
             'top_p': 0.1
         }
     )
     print(response.text)
-    response = ast.literal_eval(json.loads(response.text.strip()))
+    response = json.loads(response.text)
     print(response)
 
     return response
