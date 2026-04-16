@@ -1,17 +1,17 @@
-from fastapi import FastAPI, UploadFile, HTTPException
+from fastapi import FastAPI, UploadFile, HTTPException, Request, Form
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 import uvicorn
-# from SageMaker.check_model import load_model, get_classification
-from SageMaker import upload, deploy, predict, shutdown
-from SageMaker import SpeciesStatuses
+from SageMaker import upload, deploy, predict, shutdown, animal_loc_analysis, SpeciesStatuses
 
 # from .routers import *
 # from .utils.logger import get_logger, log_execution
 
 # logger = get_logger(__name__)
 
-# MODEL_PATH = 'model/weights/best.pth' 
+MODEL_PATH = 'model/weights/best50_93p_validacc.pth' 
 
 # bird_classifier = load_model(MODEL_PATH)
 
@@ -19,6 +19,10 @@ app = FastAPI(
     title = "EcoTrack API",
     description = "API for EcoTrack interaction"
 )
+
+app.mount('/app/static', StaticFiles(directory='app/static'), name='static')
+
+templates = Jinja2Templates(directory='app/templates')
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,8 +33,8 @@ app.add_middleware(
 )
 
 @app.get("/")
-def get_root():
-    return {"message": "Hello from main"}
+def get_root(request: Request):
+    return templates.TemplateResponse(request=request, name='home.html', context={"message": "Hello from main"})
 
 @app.post("/upload")
 
@@ -40,8 +44,9 @@ def get_root():
 
 
 @app.post("/analyze")
-async def post_analyze(img_file: UploadFile):
-    # print(img_file)
+async def post_classify_animal(request: Request, img_file: UploadFile, additional_info: str=Form()):
+    """Don't forget to write your doc comment, Isabelle"""
+    print(additional_info)
     img_extensions = ['jpeg', 'jpg', 'png', 'heic']
     ext_start_idx = img_file.filename.rfind('.')
     if(img_file.filename[ext_start_idx + 1:] in img_extensions):
@@ -50,19 +55,28 @@ async def post_analyze(img_file: UploadFile):
         await img_file.close()
     else:
         await img_file.close()
-        # Raise some error here, probably also want to send an error back to the site as an HTTP status code
-        raise HTTPException(status_code=404, detail="Needs to be an image file type with extensions []")
-        pass
-    return {
+        # Raise an error with status code 415
+        raise HTTPException(status_code=415, detail="Needs to be an image file type with extensions 'jpeg', 'jpg', 'png', or 'heic'")
+    
+    result = {
         'species' : species,
         'endangered_status': endangered_status,
         'multi': multi,
         'confidence': confidence
     }
 
+    if endangered_status == "ENDANGERED" or endangered_status == 'CRITICALLY ENDANGERED':
+        evalutation = animal_loc_analysis(result, additional_info=additional_info)
+        result['unusual_location'] = evalutation['unusual_location']
+    return templates.TemplateResponse(request=request, name='classify_animal.html', context={'result': result})
+
+@app.post("/analyze")
+def post_analyze(request: Request, img_result, additional_info: str):
+    pass
 
 def start_server():
     """
     Launch API server with uvicorn
     """
     uvicorn.run("app.server:app", host="localhost", port=8000, reload=True)
+

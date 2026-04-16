@@ -6,12 +6,13 @@ from PIL import Image
 from torchvision import transforms
 from species_status import SpeciesStatuses
 from src.AnimalResNet import AnimalResNet
-# from pytorch_grad_cam import GradCAM
-# from pytorch_grad_cam.utils.image import show_cam_on_image
-# import cv2
+from pytorch_grad_cam import GradCAM
+from pytorch_grad_cam.utils.image import show_cam_on_image
+import cv2
 
 
 MODEL_PATH = "SageMaker/local_model/model.pth" 
+
 __classes: SpeciesStatuses = SpeciesStatuses()
 
 # Transformations
@@ -50,6 +51,7 @@ def visualize_class_features(model: AnimalResNet, img_content):
 	
 def load_model(model_path: str) -> AnimalResNet:
 	"""Loads AnimalResNet model or raises an exception
+>>>>>>> main:SageMaker/check_model.py
 	args:
 		model_path: str - the path of the AnimalResNet model to load
 	returns:
@@ -108,6 +110,12 @@ if __name__ == "__main__":
 			with open(img_path, 'rb') as img_content:
 				model.eval()
 				x, y, z, a = get_classification(model, img_path)
+				result = {
+					'species' : x,
+					'endangered_status': y,
+					'multi': z,
+					'confidence': a
+				}
 				# true_label = os.path.basename(root)
 				# if x != true_label:
 					# print(f"ERROR: {true_label} WAS PREDICTED AS {x} WITH {a:.2f}% CONFIDENCE")
