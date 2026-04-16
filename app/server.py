@@ -2,16 +2,16 @@ from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
-from model.check_model import load_model, get_classification
+from SageMaker.check_model import load_model, get_classification
 
 # from .routers import *
 # from .utils.logger import get_logger, log_execution
 
 # logger = get_logger(__name__)
 
-MODEL_PATH = 'model/weights/best.pth' 
+# MODEL_PATH = 'model/weights/best.pth' 
 
-bird_classifier = load_model(MODEL_PATH)
+# bird_classifier = load_model(MODEL_PATH)
 
 app = FastAPI(
     title = "EcoTrack API",

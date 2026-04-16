@@ -5,13 +5,13 @@ import numpy as np
 from PIL import Image
 from torchvision import transforms
 from species_status import SpeciesStatuses
-from BirdResNet import BirdResNet
-from pytorch_grad_cam import GradCAM
-from pytorch_grad_cam.utils.image import show_cam_on_image
-import cv2
+from src.AnimalResNet import AnimalResNet
+# from pytorch_grad_cam import GradCAM
+# from pytorch_grad_cam.utils.image import show_cam_on_image
+# import cv2
 
 
-MODEL_PATH = "model/weights/best.pth" 
+MODEL_PATH = "SageMaker/local_model/model.pth" 
 __classes: SpeciesStatuses = SpeciesStatuses()
 
 # Transformations
@@ -25,7 +25,7 @@ std_transform = transforms.Compose([
 	) 
 ])
 
-def visualize_class_features(model: BirdResNet, img_content):
+def visualize_class_features(model: AnimalResNet, img_content):
     img = Image.open(img_content).convert("RGB")
     img_tensor = std_transform(img).unsqueeze(0)
 	
@@ -48,31 +48,35 @@ def visualize_class_features(model: BirdResNet, img_content):
     cv2.waitKey(0) # You need to click on the window with the image and press "0" to let your code move on
     cv2.destroyAllWindows()
 	
-def load_model(model_path: str) -> BirdResNet:
-	"""Loads BirdResNet model or raises an exception
+def load_model(model_path: str) -> AnimalResNet:
+	"""Loads AnimalResNet model or raises an exception
 	args:
-		model_path: str - the path of the BirdResNet model to load
+		model_path: str - the path of the AnimalResNet model to load
 	returns:
-		a BirdResNet model if the path existed and the weights in the path aligns with what is in the model called"""
+		a AnimalResNet model if the path existed and the weights in the path aligns with what is in the model called"""
 	# instantiate model
-	model = BirdResNet(201)
+	model = AnimalResNet(90)
+
+	device_type = "cuda" if torch.cuda.is_available() else "cpu"
+	if(torch.backends.mps.is_available()):
+		device_type = "mps"
 
 	# pull specific model from path
 	if os.path.exists(model_path):
-		best_model = torch.load(model_path, weights_only=True)
+		best_model = torch.load(model_path, weights_only=True, map_location=device_type)
 		model.load_state_dict(best_model["model_state_dict"])
 
 		# set to eval mode so it doesn't train
 		model.eval()
 	else:
-		raise Exception(f"Model path does not exist or you're using a different ResNet version in your bird model than you saved your weights on.")
+		raise Exception(f"Model path does not exist or you're using a different ResNet version in your animal model than you saved your weights on.")
 	return model
 
-def get_classification(model: BirdResNet, img_content):
+def get_classification(model: AnimalResNet, img_content):
 	"""
-	Uses the provided model to classify bird species and their endangered status from an input image
+	Uses the provided model to classify animal species and their endangered status from an input image
 	args:
-		model: BirdResNet - model to communicate with (to?)
+		model: AnimalResNet - model to communicate with (to?)
 		img_content: can be a file path or bytes of the image
 	returns:
 		a tuple containing the species identified/predicted, the endangered status, multi, and the model's confidence for its output
@@ -85,20 +89,28 @@ def get_classification(model: BirdResNet, img_content):
 		out = model(std_transform(img).unsqueeze(0))
 		probabilities = functional.softmax(out, dim=1) # scale probability distribution 
 		confidence, output = torch.max(probabilities, dim=1) # get the highest probability and the label associated with it
-		pred_species, endangered_status, multi = __classes[output.item() + 1] 
+		# print(f"Output: {output.item()}")
+		label, all_statuses, endangered_status = __classes[output.item()] 
 		confidence = float(confidence.item()) * 100
 
-		print(f"{pred_species} is {endangered_status}. Model was {confidence:.2f}% confident.")
-		return pred_species, endangered_status, multi, confidence
+		print(f"Output was {output.item()}, {label} is {endangered_status}. Model was {confidence:.2f}% confident.")
+		return label, all_statuses, endangered_status, confidence
 
 if __name__ == "__main__":
 	model = load_model(MODEL_PATH)
+	i = 0
+	# for root, dirs, files in os.walk("animals"):
+		# if root == "animals": continue
 	while True:
 		img_path = input("Enter the path to your image: ")
+		# img_path = os.path.join(root, files[2])
 		if os.path.exists(img_path):
 			with open(img_path, 'rb') as img_content:
 				model.eval()
 				x, y, z, a = get_classification(model, img_path)
+				# true_label = os.path.basename(root)
+				# if x != true_label:
+					# print(f"ERROR: {true_label} WAS PREDICTED AS {x} WITH {a:.2f}% CONFIDENCE")
 				# visualize_class_features(model, img_path) # uncomment if you want to see where/what the model is focusing on
 		else:
-			break
+			continue
