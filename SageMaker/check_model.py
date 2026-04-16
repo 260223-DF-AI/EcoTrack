@@ -113,4 +113,4 @@ if __name__ == "__main__":
 					# print(f"ERROR: {true_label} WAS PREDICTED AS {x} WITH {a:.2f}% CONFIDENCE")
 				# visualize_class_features(model, img_path) # uncomment if you want to see where/what the model is focusing on
 		else:
-			break
+			continue
