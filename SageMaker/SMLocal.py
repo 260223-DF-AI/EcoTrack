@@ -2,18 +2,15 @@ import os
 import shutil
 import sagemaker
 import tarfile
+from botocore.exceptions import ClientError
 from dotenv import load_dotenv
-# import torch
-# import torch.nn as nn
-# import torch.optim as optim
 from sagemaker.pytorch import PyTorch, PyTorchModel
+from sagemaker.predictor import Predictor
 from sagemaker.serializers import JSONSerializer
 from sagemaker.deserializers import JSONDeserializer
-# from src.AnimalResNet import AnimalResNet
-# import argparse
-from species_status import SpeciesStatuses
 from PIL import Image
 from torchvision import transforms
+from .species_status import SpeciesStatuses
 
 
 def upload(use_gpu: bool = False):
@@ -63,7 +60,7 @@ def upload(use_gpu: bool = False):
 
     print(f"Uploaded model to {s3_model_path}")
 
-def deploy():
+def deploy(new_endpoint: bool = True):
     """Deploy model from S3 bucket"""
     load_dotenv() # ARN from .env
     try:
@@ -95,13 +92,53 @@ def deploy():
 
     DEPLOY_DEVICE = 'ml.m5.large'
 
-    print("Creating new predictor...")
-    predictor = pytorch_model.deploy(
-        initial_instance_count=1,
-        instance_type=DEPLOY_DEVICE,
-        serializer=JSONSerializer(),
-        deserializer=JSONDeserializer()
-    )
+    if new_endpoint:
+        print("Creating new predictor...")
+        predictor = pytorch_model.deploy(
+            initial_instance_count=1,
+            instance_type=DEPLOY_DEVICE,
+            serializer=JSONSerializer(),
+            deserializer=JSONDeserializer()
+        )
+    else:
+        sm_client = session.sagemaker_client
+        configured_endpoint = os.getenv("SAGEMAKER_ENDPOINT_NAME", "").strip()
+        endpoint_name = None
+
+        if configured_endpoint:
+            try:
+                described = sm_client.describe_endpoint(EndpointName=configured_endpoint)
+                if described.get("EndpointStatus") == "InService":
+                    endpoint_name = configured_endpoint
+            except ClientError:
+                endpoint_name = None
+
+        if endpoint_name is None:
+            endpoints = sm_client.list_endpoints(
+                SortBy="CreationTime",
+                SortOrder="Descending",
+                StatusEquals="InService",
+                MaxResults=20,
+            ).get("Endpoints", [])
+            if endpoints:
+                endpoint_name = endpoints[0]["EndpointName"]
+
+        if endpoint_name is not None:
+            print(f"Connecting to existing predictor: {endpoint_name}")
+            predictor = Predictor(
+                endpoint_name=endpoint_name,
+                sagemaker_session=session,
+                serializer=JSONSerializer(),
+                deserializer=JSONDeserializer(),
+            )
+        else:
+            print("No in-service endpoint found. Creating new predictor...")
+            predictor = pytorch_model.deploy(
+                initial_instance_count=1,
+                instance_type=DEPLOY_DEVICE,
+                serializer=JSONSerializer(),
+                deserializer=JSONDeserializer(),
+            )
     print(f"Endpoint Name: {predictor.endpoint_name}")
 
     return predictor

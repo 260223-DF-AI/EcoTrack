@@ -7,17 +7,49 @@
 </head>
 <body>
     <h1>Animal Classifier</h1>
-    <form method="POST" action="/classify_animal" enctype="multipart/form-data">
+    <section class="model-controls">
+        <h2>Model Controls</h2>
+        <div class="button-row">
+            <button type="button" onclick="callModelAction('/upload')">Upload</button>
+            <button type="button" onclick="callModelAction('/deploy')">Deploy</button>
+            <button type="button" onclick="callModelAction('/delete')">Shutdown</button>
+        </div>
+        <p id="model-action-status" aria-live="polite"></p>
+    </section>
+
+    <form method="POST" action="/analyze" enctype="multipart/form-data">
         <label for="upload-photo">Upload a Photo of an Animal</label>
         <input type="file" id="upload-photo" name="img_file" accept="image/jpeg, image/png, image/heic">
         <br>
         <label for="context">Any information you want to provide on the weather, biome, habitat, or location<br></label>
         <input type="text" id="context" name="additional_info">
         <br>
-        <button type="submit">Upload</button>
+        <button type="submit">Analyze Image</button>
     </form>
     <div class="container">
         {% block content %} {% endblock %}
     </div>
+
+    <script>
+        async function callModelAction(path) {
+            const statusEl = document.getElementById('model-action-status');
+            statusEl.textContent = 'Working...';
+
+            try {
+                const response = await fetch(path, { method: 'POST' });
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    const detail = payload.detail || payload.message || 'Request failed';
+                    statusEl.textContent = `Error (${response.status}): ${detail}`;
+                    return;
+                }
+
+                statusEl.textContent = payload.message || 'Done';
+            } catch (err) {
+                statusEl.textContent = `Request error: ${err}`;
+            }
+        }
+    </script>
 </body>
 </html>

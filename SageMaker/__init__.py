@@ -1,3 +1,3 @@
-from SMLocal import upload, deploy, predict, shutdown
-from species_status import SpeciesStatuses
-from llm import animal_loc_analysis
+from .SMLocal import upload, deploy, predict, shutdown
+from .species_status import SpeciesStatuses
+from .llm import animal_loc_analysis
