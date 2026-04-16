@@ -8,6 +8,7 @@ class Base(DeclarativeBase):
     pass
 
 class AuditLog(Base):
+    """Object for the auditlog table in postgreSQL"""
     __tablename__ = 'auditlog'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -22,15 +23,24 @@ class AuditLog(Base):
 
 class Database:
     def __init__(self):
+        """Load the postgreSQL database connection string and initialize the engine"""
         load_dotenv()
 
         self.CS = getenv('CS')
         self.engine = create_engine(self.CS)
 
-    def add_log(self, classifier_response: dict, llm_response: dict):
-        responses = classifier_response.update(llm_response)
-        df = DataFrame(responses)
+    def add_log(self, classifier_response: dict, llm_response: dict) -> None:
+        """Records the outputs from both models to the audit logs
+
+        Args:
+            classifier_response - Result provided by the image classification model
+            llm_response - Result returned from gemini if an endangered species was identified. Otherwise all fields are None
+        """
+        classifier_response.update(llm_response) # combine into one dictionary, the classifier response one
+        df = DataFrame(classifier_response) # convert to pandas DataFrame so it can easily be sent to sql
         df.to_sql(name='auditlog', con=self.CS, index=False, if_exists='append')
+    
+    # look into if I need to close the connection or connect the engine
 
 
 

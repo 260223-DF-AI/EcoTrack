@@ -109,17 +109,18 @@ async def post_classify_animal(request: Request, img_file: UploadFile, additiona
     }
 
     # get most critical status of an animal
-    endangered_status = endangered_status[-1]
+    if type(endangered_status) is list:
+        endangered_status = endangered_status[-1]
     # get the status from the abreviation
     endangered_status = species_statuses.statuses[endangered_status]
     # update value in dictionary
     result['endangered_status'] = endangered_status
 
     if endangered_status in ['ENDANGERED', 'CRITICALLY ENDANGERED', 'REGIONALLY']:
-        evalutation = animal_loc_analysis(result, additional_info=additional_info)
+        evalutation = animal_loc_analysis(result, additional_info=additional_info) # get unusual location status from gemini
         result['unusual_location'] = evalutation['unusual_location']
     else:
-        evaluation = {'unusual_location', 'reason', 'llm_confidence'}
+        evaluation = {'unusual_location': None, 'reason': None, 'llm_confidence': None}
     
     # log database to have a trail to audit
     Database.add_log(result, evaluation)
