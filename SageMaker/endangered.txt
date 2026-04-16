@@ -81,7 +81,7 @@
 80 bison, NT
 81 cow, LC
 82 deer, LC
-83 lion, VU, CR, RE
+83 lion, VU, CR
 84 goose, LC
 85 shark, LC, NT, VU, CR
 86 snake, LC, EN, CR

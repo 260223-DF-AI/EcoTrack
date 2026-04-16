@@ -19,9 +19,9 @@ def main():
     	) 
     ])
 
-    predictor = deploy()
+    # predictor = deploy()
 
-    return
+    # return
     try:
         while True:
             img_path = input("Enter the path to your image: ")
