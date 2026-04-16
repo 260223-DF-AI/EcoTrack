@@ -4,8 +4,8 @@ import torch.nn.functional as functional
 import numpy as np
 from PIL import Image
 from torchvision import transforms
-from SageMaker.species_status import SpeciesStatuses
-from SageMaker.src.AnimalResNet import AnimalResNet
+from species_status import SpeciesStatuses
+from src.AnimalResNet import AnimalResNet
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
 import cv2

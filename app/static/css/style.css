@@ -7,3 +7,32 @@ h1 {
     text-align: center;
     padding: 10px;
 }
+
+.model-controls {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+    max-width: 640px;
+}
+
+.model-controls h2 {
+    margin-top: 0;
+}
+
+.button-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.button-row button {
+    padding: 8px 14px;
+    cursor: pointer;
+}
+
+#model-action-status {
+    min-height: 1.25rem;
+    margin-top: 10px;
+    color: #333;
+}

@@ -9,5 +9,6 @@
             in not in an unusual location
         {% endif %}
     {% endif %} </p>
-    <p>The model was {{ result['classifier_confidence'] }}% confident in its conclusion.</p>
+    <p>The model was {{ "%.2f"|format(result['confidence']) }}% confident in its conclusion.</p>
+
 {% endblock %}

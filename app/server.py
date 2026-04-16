@@ -54,23 +54,35 @@ def post_upload():
     return JSONResponse(content={"message": "Model package uploaded."})
 
 @app.post("/deploy")
-def post_deploy():
+def post_deploy(new_endpoint: bool = Form(True)):
     # Replace an existing endpoint reference with a fresh deployment when requested.
     if app.state.predictor is not None:
         shutdown(app.state.predictor)
-    app.state.predictor = deploy()
+    app.state.predictor = deploy(new_endpoint=new_endpoint)
     return JSONResponse(content={"message": "Model deployed.", "endpoint": app.state.predictor.endpoint_name})
+
+
+@app.post("/delete")
+def post_delete():
+    if app.state.predictor is None:
+        return JSONResponse(content={"message": "No predictor endpoint to delete."})
+
+    endpoint_name = app.state.predictor.endpoint_name
+    shutdown(app.state.predictor)
+    app.state.predictor = None
+    return JSONResponse(content={"message": "Predictor endpoint deleted.", "endpoint": endpoint_name})
 
 
 @app.on_event("startup")
 def on_startup():
     # Create one predictor for the app process and reuse it across requests.
     if app.state.predictor is None:
-        app.state.predictor = deploy()
+        app.state.predictor = deploy(new_endpoint=False)
 
 
 @app.on_event("shutdown")
 def on_shutdown():
+    return
     if app.state.predictor is not None:
         shutdown(app.state.predictor)
         app.state.predictor = None

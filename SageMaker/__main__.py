@@ -1,11 +1,11 @@
 import os
 from PIL import Image
 from torchvision import transforms
-from SMLocal import upload, deploy, predict, shutdown
-from species_status import SpeciesStatuses
+from .SMLocal import upload, deploy, predict, shutdown
+from .species_status import SpeciesStatuses
 
 def main():
-    upload()
+    # upload()
 
     species_statuses = SpeciesStatuses()
 
@@ -19,8 +19,9 @@ def main():
     	) 
     ])
 
-    predictor = deploy()
+    # predictor = deploy()
 
+    # return
     try:
         while True:
             img_path = input("Enter the path to your image: ")
