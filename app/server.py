@@ -7,6 +7,7 @@ import uvicorn
 from SageMaker import upload, deploy, predict, shutdown, animal_loc_analysis, SpeciesStatuses
 from PIL import Image
 from torchvision import transforms
+from database.database import Database
 
 # from .utils.logger import get_logger, log_execution
 
@@ -79,11 +80,11 @@ def on_shutdown():
 @app.post("/analyze")
 async def post_classify_animal(request: Request, img_file: UploadFile, additional_info: str=Form()):
     """Classify an uploaded image and return the rendered result page."""
-    img_extensions = ['jpeg', 'jpg', 'png', 'heic']
+    img_extensions = ['jpeg', 'jpg', 'png']
     ext_start_idx = img_file.filename.rfind('.')
     if ext_start_idx == -1 or img_file.filename[ext_start_idx + 1:].lower() not in img_extensions:
         await img_file.close()
-        raise HTTPException(status_code=415, detail="Needs to be an image file type with extensions 'jpeg', 'jpg', 'png', or 'heic'")
+        raise HTTPException(status_code=415, detail="Needs to be an image file type with extensions 'jpeg', 'jpg', or 'png'")
 
     if app.state.predictor is None:
         await img_file.close()
@@ -103,8 +104,8 @@ async def post_classify_animal(request: Request, img_file: UploadFile, additiona
     result = {
         'species' : species,
         'endangered_status': endangered_status,
-        'all statuses': all_statuses,
-        'confidence': confidence
+        'all_statuses': all_statuses,
+        'classifier_confidence': confidence
     }
 
     # get most critical status of an animal
@@ -117,6 +118,11 @@ async def post_classify_animal(request: Request, img_file: UploadFile, additiona
     if endangered_status in ['ENDANGERED', 'CRITICALLY ENDANGERED', 'REGIONALLY']:
         evalutation = animal_loc_analysis(result, additional_info=additional_info)
         result['unusual_location'] = evalutation['unusual_location']
+    else:
+        evaluation = {'unusual_location', 'reason', 'llm_confidence'}
+    
+    # log database to have a trail to audit
+    Database.add_log(result, evaluation)
 
     return templates.TemplateResponse(request=request, name='classify_animal.html', context={'result': result})
 

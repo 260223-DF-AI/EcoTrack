@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 import os
 import graph_of_thoughts
 import json
-import ast
 import re
 """In order to be able to run this file you have to:
 1. Go to google AI studio (you can get started for free)
@@ -29,12 +28,12 @@ RESPONSE_FORMAT = {"type": "object",
                         'reason': {
                             "type": "string",
                         }, 
-                        'confidence': {
+                        'llm_confidence': {
                             "type": "number",
                             "minimum": 0.0,
                             "maximum": 100.0,
                         }
-                    }, "required": ["unusual_location", "confidence", "reason"]
+                    }, "required": ["unusual_location", "reason", "llm_confidence"]
                 }
 INJECTION_PATTERNS = [
     r"ignore (all |your )?(previous |prior )?instructions",
