@@ -28,7 +28,7 @@ class SpeciesStatuses():
                 label = animal[1]
                 statuses = animal[2:]
                 caution = -1 if cautious else 0
-                self.species[idx] = (label, statuses, self.statuses[status[caution]])                
+                self.species[idx] = (label, statuses, self.statuses[statuses[caution]])                
                 # print(self.species[idx])
 
     def __getitem__(self, label: int):
