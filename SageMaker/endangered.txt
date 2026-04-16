@@ -1,0 +1,90 @@
+0 hippopotamus, VU, CR, RE
+1 sparrow, LC
+2 gorilla, CR
+3 cat, LC
+4 rhinoceros, NT, CR
+5 wombat, LC, CR
+6 seahorse, LC, NT
+7 butterfly, LC
+8 donkey, LC
+9 raccoon, LC, NT, CR
+10 dragonfly, LC
+11 crab, LC, EN
+12 pig, LC, NT, VU, CR
+13 orangutan, CR
+14 turtle, LC, VU, EN, CR
+15 antelope, LC
+16 dog, LC
+17 bee, LC, NT, VU
+18 coyote, LC
+19 fox, LC, NT, EN
+20 pigeon, LC
+21 dolphin, LC, NT, EN
+22 fly, LC, VU, EN
+23 turkey, LC
+24 boar, LC
+25 goldfish, LC
+26 hare, LC, EN, CR
+27 bear, LC, VU
+28 penguin, LC, NT, VU
+29 squid, DD, NT
+30 zebra, LC, NT
+31 leopard, LC, , NT, VU, EN
+32 sheep, LC
+33 hamster, LC, NT, VU, EN, CR
+34 panda, EN, CR
+35 mosquito, LC
+36 lobster, LC, VU
+37 duck, LC
+38 ox, LC, VU, CR
+39 owl, LC, NT, VU
+40 tiger, EN, RE
+41 whale, LC, CR
+42 crow, LC
+43 rat, LC
+44 moth, EN, CR
+45 eagle, NT, EN
+46 reindeer, VU
+47 grasshopper, LC, NT, VU, EN, CR
+48 otter, LC, NT, VU, EN
+49 starfish, CR
+50 hyena, LC
+51 goat, LC, VU, EN, CR
+52 sandpiper, NT, CR
+53 seal, LC, NT, EN
+54 jellyfish, LC
+55 hummingbird, LC, NT, VU
+56 mouse, LC
+57 hornbill, VU, EN, CR
+58 porcupine, LC
+59 wolf, LC, CR
+60 lizard, LC, NT
+61 woodpecker, LC, VU, EN
+62 beetle, LC, NT
+63 chimpanzee, EN, CR
+64 parrot, LC, NT, VU, EN, CR
+65 kangaroo, LC
+66 pelicans, LC, NT
+67 oyster, LC
+68 caterpillar, LC, VU, EN
+69 okapi, EN
+70 ladybugs, LC
+71 bat, LC, VU, EN
+72 cockroach, LC
+73 koala, VU
+74 swan, LC
+75 octopus, LC
+76 hedgehog, LC, VU
+77 horse, LC
+78 flamingo, LC, NT, VU
+79 squirrel, LC
+80 bison, NT
+81 cow, LC
+82 deer, LC
+83 lion, VU, CR, RE
+84 goose, LC
+85 shark, LC, NT, VU, CR
+86 snake, LC, EN, CR
+87 badger, LC, VU
+88 elephant, EN, CR
+89 possum, LC, NT

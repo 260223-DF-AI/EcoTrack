@@ -24,7 +24,11 @@ import matplotlib.pyplot as plt
 
 from PIL import Image
 
+<<<<<<<< HEAD:SageMaker/AnimalResNet.py
 from model.species_status import SpeciesStatuses
+========
+# from species_status import SpeciesStatuses
+>>>>>>>> main:SageMaker/src/AnimalResNet.py
 
 # Global Variables
 DATA_ROOT = "animals"
@@ -47,16 +51,23 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 class AnimalResNet(nn.Module):
     """
-    Bird species classification model. Built on pretrained ResNet model.
+    Animal species classification model. Built on pretrained ResNet model.
     """
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, pretrained: bool = True):
         super(AnimalResNet, self).__init__()
 
         # Transfer Learning based on ResNet model
         # Options are 18, 34, 50, 101, and 152
         # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+<<<<<<<< HEAD:SageMaker/AnimalResNet.py
         self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+========
+        if pretrained:
+            self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+        else:
+            self.model = models.resnet50(weights=None)
+>>>>>>>> main:SageMaker/src/AnimalResNet.py
         # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
         # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
@@ -65,8 +76,6 @@ class AnimalResNet(nn.Module):
             param.requires_grad = False
         for param in self.model.layer4.parameters():
             param.requires_grad = True
-        # for param in self.model.layer3.parameters():
-        #     param.requires_grad = True
 
         # Replace final fully-connected linear layer with our own to fine-tune
         # Allows us to set our number of output classes
@@ -132,13 +141,9 @@ def load_data(batch_size: int = 128):
     # Read all images and group by folder/class
     class_images = {}
     for root, dirs, files in os.walk(DATA_ROOT):
-        for label in dirs:
-            if label not in class_images.keys():
-                class_images[label] = []
-        
-        # Extract label from the current directory path
+        if root == "animals": continue
         label = os.path.basename(root)
-        if label not in class_images:
+        if label not in list(class_images.keys()):
             class_images[label] = []
         
         for file in files:
@@ -146,7 +151,7 @@ def load_data(batch_size: int = 128):
                 class_images[label].append(os.path.join(root, file))
 
     # Split each class 80/10/10
-    for i, label in enumerate(class_images.keys()):
+    for i, label in enumerate(list(class_images.keys())):
         paths = class_images[label]
         random.shuffle(paths)
         
@@ -317,7 +322,7 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
     """
     print()
     print("--- Final Validation ---")
-
+    """
     species_statuses = SpeciesStatuses()
     status_counts = {}
 
@@ -328,7 +333,7 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
             "total" : 0,
             "confidence" : 0.0
         }
-
+    """
     # initialize variables for confusion matrix
     correct_pred = {classname: 0 for classname in classes}
     total_pred = {classname: 0 for classname in classes}
@@ -358,19 +363,20 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
             all_y_pred.extend(predictions.cpu().numpy())
             all_y_true.extend(y.cpu().numpy())
             for label, prediction, prob in zip(y, predictions, max_probs):
-                status = species_statuses[label.item()+1][1]
-                status_p = species_statuses[prediction.item()+1][1]
+                # status = species_statuses[label.item()+1][1]
+                # status_p = species_statuses[prediction.item()+1][1]
                 if label == prediction:
                     correct_pred[classes[label.item()]] += 1
-                    status_counts[status]["correct"] +=1
-                else:
-                    status_counts[status_p]["incorrect"] +=1
-                    status_counts[status_p]["confidence"] += prob
+                    # status_counts[status]["correct"] +=1
+                # else:
+                    # status_counts[status_p]["incorrect"] +=1
+                    # status_counts[status_p]["confidence"] += prob
 
-                total_pred[classes[label.item()]] += 1
-                status_counts[status]["total"] +=1
-    incorrect = total - correct
+                # total_pred[classes[label.item()]] += 1
+                # status_counts[status]["total"] +=1
+    # incorrect = total - correct
 
+    """
     for key, value in status_counts.items():
         print()
         try:
@@ -389,6 +395,7 @@ def validate(dataloader, model, loss_fn, writer, device, classes):
         print(f"{key}: {accuracy:.2f}% accruacy")
         print(f"{key}: {incorrect_p:.2f}% of incorrect predictions fell under this category")
         print(f"{key}: {incorrect_c:.2f}% average confidence of predictions incorrectly identifying this category")
+    """
 
     # create the confusion matrix and store it in a dataframe
     cf_matrix = confusion_matrix(all_y_true, all_y_pred)

@@ -4,8 +4,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from model.llm import animal_loc_analysis
-from model.check_model import load_model, get_classification
+from SageMaker.llm import animal_loc_analysis
+from SageMaker.check_model import load_model, get_classification
 
 # from .routers import *
 # from .utils.logger import get_logger, log_execution
@@ -14,7 +14,7 @@ from model.check_model import load_model, get_classification
 
 MODEL_PATH = 'model/weights/best50_93p_validacc.pth' 
 
-bird_classifier = load_model(MODEL_PATH)
+# bird_classifier = load_model(MODEL_PATH)
 
 app = FastAPI(
     title = "EcoTrack API",

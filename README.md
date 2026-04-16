@@ -1,7 +1,7 @@
 # EcoTrack
 
 ## Description
-Fine-tuned a torchvision model to identify bird species and map the output to their respective endangered status. Species classified as endangered are provided as input to a large language model, along with the image location. The LLM uses Graph of Thought and ReAct to determine whether the bird is in an unusual location, which prompts a conservation alert.
+Fine-tuned a torchvision model to identify 90 different species and map the output to their respective endangered status according to IUCN. Species classified as endangered are provided as input to a large language model, along with geographic information. The LLM uses Graph of Thought and ReAct to determine whether the endangered animal is in an unusual location, which prompts a conservation alert.
 
 ## Problem
 - **The Problem**: A conservation group needs to monitor endangered species in trail camera footage.
@@ -9,21 +9,17 @@ Fine-tuned a torchvision model to identify bird species and map the output to th
 - **Reasoning Task**: Use **Graph of Thought (GoT)** to analyze location/weather logs and **ReAct** to draft a conservation alert if an endangered species is identified in an unusual location.
 
 ## Approach
-Fine-tuning a torchvision ResNet model to classify bird images among 200 classes. If the identified species is classified as worse than "Least Concern" according to the IUCN, proceed to an LLM that determines whether the provided image location is unusual for that species, issuing a "Conservation Alert" when necessary.
+Fine-tuning a torchvision ResNet model to classify animal images among 90 classes. If the identified species is classified as worse than "Least Concern" according to the IUCN, proceed to an LLM that determines whether the provided image location and/or weather is unusual for that species, issuing a "Conservation Alert" when necessary.
+Animals with different "subspecies" with different endangered statuses are all grouped according to "worst case scenario," assuming the provided image is the species at most risk. This will require human review for conservation alerts. We would rather a false positive for a conservation alert than a false negative.
 
 ## Key Features
-- Torchvision-based CNN with residual connections for classifying bird images between 200 species
+- Torchvision-based CNN with residual connections for classifying animal images between 90 species
     - Cross Entropy Loss for multiple classes
-    - Use torchvision.models.resnet
-- Fine-tuned LLM with Graph-of-Thought prompting trained on endangered bird species locations
-    - The Graph of Thought article under **Further Reading** mentions a `graph-of-thought` package we may be able to use depending on our LLM implementation.
-    - Should only need to train/finetune on endangered bird species and their expected locations
-    - Binary/Ternary output? No warning, Warning, and potential "Semi-Warning"
-        - Some classes might be families or groups of species and have varying statuses, and require human review. 
+    - ResNet50 base model 
+    - LLM with Graph-of-Thought prompting trained on endangered bird species locations
 
 ## Limitations
-- Does not seem to be able to classify birds in flight, from the few species I have tried comparing images in flight and not in flight with, our model classified most of them as "Not a Bird", sometimes it would be classified as the wrong bird specied, and very rarely would it correctly classified.
-- Does not seem to be able to pick up on multiple birds in an image.
+- Due to the generality of the species trained on, the image classifier will not discern between specific kinds that might have different endangered statuses. We elected to err on the side of caution and raise an alert assuming the image is of the most threatened species of its family, preferring false positives over false negatives.
 
 # Resources
 
@@ -37,36 +33,23 @@ Fine-tuning a torchvision ResNet model to classify bird images among 200 classes
 - CR: CRITICALLY ENDANGERED
 - EW: EXTINCT IN THE WILD
 - EX: EXTINCT
-According to IUCN as of 4/2/2026
-*If classes correlate to a family or group of species, default to the most vulnerable
+According to IUCN as of 4/15/2026
 
 ## Images
-[Kaggle - Caltech](https://www.kaggle.com/datasets/veeralakrishna/200-bird-species-with-11788-images?resource=download)
+- [90 Animals, 5.4k Images](https://www.kaggle.com/datasets/iamsouravbanerjee/animal-image-dataset-90-different-animals?select=animals)
 
 ## Endangered Species Lists
 - [IUCN Red List](https://www.iucnredlist.org/)
 - [GBIF species database](https://www.gbif.org/)
 - [WWF species lists](https://www.worldwildlife.org/)
 
-## Bird Databases
-- [Avibase](https://avibase.bsc-eoc.org/)
 
-## Possible Resources
-- [Endangered](https://ecos.fws.gov/ecp0/reports/ad-hoc-species-report?kingdom=V&kingdom=I&status=E&status=T&status=EmE&status=EmT&status=EXPE&status=EXPN&status=SAE&status=SAT&mapstatus=3&fcrithab=on&fstatus=on&fspecrule=on&finvpop=on&fgroup=on&header=Listed+Animals)
-- [Bird model](https://huggingface.co/dennisjooo/Birds-Classifier-EfficientNetB2) 
-- [General model](https://huggingface.co/google/efficientnet-b2)
-- [Found on GitHub](https://github.com/Moddy2024/Bird-Classification?tab=readme-ov-file)
-- [5 Mil Bird Images](https://ieee-dataport.org/documents/lasbird-large-scale-bird-recognition-dataset)
-- [Bird Feature and Location Data](https://onlinelibrary.wiley.com/doi/full/10.1111/ele.13898)
-- [Big Bird](https://rdm.uq.edu.au/files/6f45329e-eccc-4e1e-afac-8895ee4123ee)
-- [NABirds, Cornell Lab of Ornithology](https://dl.allaboutbirds.org/nabirds)
 
-## Non-Bird Resources (#, Endangered/Generic, # Images)
-- [22 Generic Florida Species + Endangered Panther, 100k](https://www.crcv.ucf.edu/research/projects/florida-wildlife-camera-trap-dataset/)
+## Potential Resources (# Species, # Images)
+- [22 Florida Species, 100k](https://www.crcv.ucf.edu/research/projects/florida-wildlife-camera-trap-dataset/)
 - [11 Endangered Species, 28k](https://lote-animal.github.io/)
-- [10 Generic Animals, 26k](https://www.kaggle.com/datasets/alessiocorrado99/animals10)
-- [90 Generic Animals, 5.4k](https://www.kaggle.com/datasets/iamsouravbanerjee/animal-image-dataset-90-different-animals?select=animals)
-- [100 Generic Animals, 40k](https://www.scidb.cn/en/detail?dataSetId=e2ebd46cb1304a82bab54a8873cb3004)
+- [10 Species, 26k](https://www.kaggle.com/datasets/alessiocorrado99/animals10)
+- [100 Species, 40k](https://www.scidb.cn/en/detail?dataSetId=e2ebd46cb1304a82bab54a8873cb3004)
 
 
 ## Further Reading
