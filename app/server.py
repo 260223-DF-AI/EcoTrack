@@ -8,7 +8,6 @@ from SageMaker import upload, deploy, predict, shutdown, animal_loc_analysis, Sp
 from PIL import Image
 from torchvision import transforms
 
-# from .routers import *
 # from .utils.logger import get_logger, log_execution
 
 # logger = get_logger(__name__)
