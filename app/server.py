@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from SageMaker.llm import animal_loc_analysis
 from SageMaker.check_model import load_model, get_classification
+from SageMaker.species_status import SpeciesStatuses
 
 # from .routers import *
 # from .utils.logger import get_logger, log_execution
@@ -15,6 +16,7 @@ from SageMaker.check_model import load_model, get_classification
 MODEL_PATH = 'model/weights/model.pth' 
 
 bird_classifier = load_model(MODEL_PATH)
+statuses = SpeciesStatuses()
 
 app = FastAPI(
     title = "EcoTrack API",
@@ -65,7 +67,6 @@ async def post_classify_animal(request: Request, img_file: UploadFile, additiona
     - confidence: Confidence score of the classification.
     - unusual_location: (Only if endangered) Analysis of whether the location is unusual.
     """
-    print(additional_info)
     img_extensions = ['jpeg', 'jpg', 'png', 'heic']
     ext_start_idx = img_file.filename.rfind('.')
     if(img_file.filename[ext_start_idx + 1:] in img_extensions):
@@ -84,34 +85,14 @@ async def post_classify_animal(request: Request, img_file: UploadFile, additiona
         'confidence': confidence
     }
 
-    print(endangered_status)
     # get most critical status of an animal
     endangered_status = endangered_status[-1]
-    # map it to words
-    match endangered_status:
-        case 'NE': 
-            endangered_status = 'NOT EVALUATED'
-        case 'DD': 
-            endangered_status = 'DATA DEFICIENT'
-        case 'LC': 
-            endangered_status = 'LEAST CONCERN'
-        case 'NT': 
-            endangered_status = 'NEAR THREATENED'
-        case 'VU': 
-            endangered_status = 'VULNERABLE'
-        case 'EN': 
-            endangered_status = 'ENDANGERED'
-        case 'CR': 
-            endangered_status = 'CRITICALLY ENDANGERED'
-        case 'EW': 
-            endangered_status = 'EXTINCT IN THE WILD'
-        case 'EX': 
-            endangered_status = 'EXTINCT'
-        
+    # get the status from the abreviation
+    endangered_status = statuses.statuses[endangered_status]
+    # update value in dictionary
     result['endangered_status'] = endangered_status
             
     if endangered_status == 'ENDANGERED' or endangered_status == 'CRITICALLY ENDANGERED':
-        print("If statement entered")
         evalutation = animal_loc_analysis(result, additional_info=additional_info)
         result['unusual_location'] = evalutation['unusual_location']
 
