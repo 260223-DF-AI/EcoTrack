@@ -84,7 +84,7 @@ def animal_loc_analysis(class_pred: dict, additional_info: str):
     additional_info = preprocess_uinput(additional_info)
     prompt = f"""{IN_CONTEXT}
 
-Output as a string enclosed in triple double quotes and strictly adhere to this format (put your entire Graph of Thought process into the 'reason' section):
+Output as a string enclosed in double quotes and strictly adhere to this format (put your entire Graph of Thought process into the 'reason' section):
 {OUT_FORMAT}
 
 The species detected in the image:

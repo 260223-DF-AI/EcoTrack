@@ -6,7 +6,6 @@ from PIL import Image
 from torchvision import transforms
 from model.species_status import SpeciesStatuses
 from model.AnimalResNet import AnimalResNet
-from model.llm import animal_loc_analysis
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
 import cv2
@@ -69,13 +68,6 @@ def load_model(model_path: str) -> AnimalResNet:
 	else:
 		raise Exception(f"Model path does not exist or you're using a different ResNet version in your bird model than you saved your weights on.")
 	return model
-
-def reasoning_action_loop(model: AnimalResNet, img_content, additional_info):
-	# de
-	pass
-
-def get_usual_habitat_info():
-	pass
 
 def get_classification(model: AnimalResNet, img_content):
 	"""
