@@ -2,7 +2,9 @@ from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
-from SageMaker.check_model import load_model, get_classification
+# from SageMaker.check_model import load_model, get_classification
+from SageMaker import upload, deploy, predict, shutdown
+from SageMaker import SpeciesStatuses
 
 # from .routers import *
 # from .utils.logger import get_logger, log_execution
@@ -30,8 +32,15 @@ app.add_middleware(
 def get_root():
     return {"message": "Hello from main"}
 
-@app.post("/classify_bird")
-async def post_classify_bird(img_file: UploadFile):
+@app.post("/upload")
+
+
+@app.post("/deploy")
+
+
+
+@app.post("/analyze")
+async def post_analyze(img_file: UploadFile):
     # print(img_file)
     img_extensions = ['jpeg', 'jpg', 'png', 'heic']
     ext_start_idx = img_file.filename.rfind('.')
@@ -51,9 +60,6 @@ async def post_classify_bird(img_file: UploadFile):
         'confidence': confidence
     }
 
-@app.post("/analyze")
-def post_analyze():
-    pass
 
 def start_server():
     """
