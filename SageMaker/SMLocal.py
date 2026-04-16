@@ -123,7 +123,7 @@ def predict(predictor, input_data):
         raise ValueError(f"Unexpected prediction response format: {response}")
 
     # print("Result:\n" + response)
-    return predictor, confidence, label #feed label to a speciesstatus object to get information, dont put in here or else we'll have to make a new object constantly
+    return confidence, label #feed label to a speciesstatus object to get information, dont put in here or else we'll have to make a new object constantly
 
 
 def shutdown(predictor):
@@ -164,7 +164,7 @@ if __name__ == "__main__":
                 continue
 
             input_data = std_transform(img).unsqueeze(0)
-            predictor, confidence, label = predict(predictor, input_data)
+            confidence, label = predict(predictor, input_data)
             print(f"Class: {species_statuses[label]}, %{confidence:.2f} confidence.")
     except Exception as e:
         print(e)

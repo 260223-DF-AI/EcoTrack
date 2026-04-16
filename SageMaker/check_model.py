@@ -51,7 +51,6 @@ def visualize_class_features(model: AnimalResNet, img_content):
 	
 def load_model(model_path: str) -> AnimalResNet:
 	"""Loads AnimalResNet model or raises an exception
->>>>>>> main:SageMaker/check_model.py
 	args:
 		model_path: str - the path of the AnimalResNet model to load
 	returns:

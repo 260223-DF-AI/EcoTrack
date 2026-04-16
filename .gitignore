@@ -49,4 +49,3 @@ test/
 bird_confusion_matrix.png
 local_model/
 *.tar.gz
-.env*
