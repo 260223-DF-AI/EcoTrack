@@ -12,9 +12,9 @@ from SageMaker.check_model import load_model, get_classification
 
 # logger = get_logger(__name__)
 
-MODEL_PATH = 'model/weights/best50_93p_validacc.pth' 
+MODEL_PATH = 'model/weights/model.pth' 
 
-# bird_classifier = load_model(MODEL_PATH)
+bird_classifier = load_model(MODEL_PATH)
 
 app = FastAPI(
     title = "EcoTrack API",

@@ -24,11 +24,7 @@ import matplotlib.pyplot as plt
 
 from PIL import Image
 
-<<<<<<<< HEAD:SageMaker/AnimalResNet.py
-from model.species_status import SpeciesStatuses
-========
 # from species_status import SpeciesStatuses
->>>>>>>> main:SageMaker/src/AnimalResNet.py
 
 # Global Variables
 DATA_ROOT = "animals"
@@ -60,14 +56,10 @@ class AnimalResNet(nn.Module):
         # Options are 18, 34, 50, 101, and 152
         # self.model = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
         # self.model = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
-<<<<<<<< HEAD:SageMaker/AnimalResNet.py
-        self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-========
         if pretrained:
             self.model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
         else:
             self.model = models.resnet50(weights=None)
->>>>>>>> main:SageMaker/src/AnimalResNet.py
         # self.model = models.resnet101(weights=models.ResNet101_Weights.DEFAULT)
         # self.model = models.resnet152(weights=models.ResNet152_Weights.DEFAULT)
 
