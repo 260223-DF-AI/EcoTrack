@@ -57,6 +57,10 @@ async def post_classify_bird(request: Request, img_file: UploadFile, additional_
         'multi': multi,
         'confidence': confidence
     }
+
+    if endangered_status == "ENDANGERED" or endangered_status == 'CRITICALLY ENDANGERED':
+        if len(additional_info) > MAX_CHARS:
+            raise # Find some specific error to raise. Preferable an http one with a status code
     return templates.TemplateResponse(request=request, name='classify_animal.html', context={'result': result})
 
 @app.post("/analyze")
