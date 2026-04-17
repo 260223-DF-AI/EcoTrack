@@ -1,7 +1,7 @@
 {% extends "home.html" %}
 {% block content %} 
     <p>The image contains {{ result['species'] }}, most critical conservation status is {{ result['endangered_status'] }}
-    {% if result['endangered_status'] in ['ENDANGERED', 'CRITICALLY ENDANGERED', 'REGIONALLY'] %}
+    {% if result['endangered_status'] in ['ENDANGERED', 'CRITICALLY ENDANGERED', 'REGIONALLY EXTINCT'] %}
         and is
         {% if result['unusual_location'] == True %}
             in an unusual location.
@@ -9,6 +9,6 @@
             in not in an unusual location
         {% endif %}
     {% endif %} </p>
-    <p>The model was {{ "%.2f"|format(result['confidence']) }}% confident in its conclusion.</p>
+    <p>The model was {{ "%.2f"|format(result['classifier_confidence']) }}% confident in its conclusion.</p>
 
 {% endblock %}

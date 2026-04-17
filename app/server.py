@@ -7,7 +7,7 @@ import uvicorn
 from SageMaker import upload, deploy, predict, shutdown, animal_loc_analysis, SpeciesStatuses
 from PIL import Image
 from torchvision import transforms
-from database.database import Database
+from database.model_log_database import Database
 
 # from .utils.logger import get_logger, log_execution
 
@@ -19,6 +19,7 @@ app = FastAPI(
 )
 
 species_statuses = SpeciesStatuses()
+audit_db = Database()
 
 std_transform = transforms.Compose([
     transforms.Resize((256, 256)),
@@ -120,22 +121,16 @@ async def post_classify_animal(request: Request, img_file: UploadFile, additiona
         'classifier_confidence': confidence
     }
 
-    # get most critical status of an animal
-    if type(endangered_status) is list:
-        endangered_status = endangered_status[-1]
-    # get the status from the abreviation
-    endangered_status = species_statuses.statuses[endangered_status]
-    # update value in dictionary
-    result['endangered_status'] = endangered_status
-
-    if endangered_status in ['ENDANGERED', 'CRITICALLY ENDANGERED', 'REGIONALLY']:
-        evalutation = animal_loc_analysis(result, additional_info=additional_info) # get unusual location status from gemini
-        result['unusual_location'] = evalutation['unusual_location']
+    evaluation = {}
+    if endangered_status in ['ENDANGERED', 'CRITICALLY ENDANGERED', 'REGIONALLY EXTINCT']:
+        evaluation = animal_loc_analysis(result, additional_info=additional_info) # get unusual location status from gemini
+        result['unusual_location'] = evaluation['unusual_location']
     else:
-        evaluation = {'unusual_location': None, 'reason': None, 'llm_confidence': None}
+        evaluation = {"unusual_location": None, "reason": None, "llm_confidence": None}
+    print("after conditional")
     
     # log database to have a trail to audit
-    Database.add_log(result, evaluation)
+    audit_db.add_log(classifier_response=result, llm_response=evaluation)
 
     return templates.TemplateResponse(request=request, name='classify_animal.html', context={'result': result})
 
