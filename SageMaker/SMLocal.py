@@ -60,7 +60,7 @@ def upload(use_gpu: bool = False):
 
     print(f"Uploaded model to {s3_model_path}")
 
-def deploy(new_endpoint: bool = True):
+def deploy(new_endpoint: bool = False):
     """Deploy model from S3 bucket"""
     load_dotenv() # ARN from .env
     try:

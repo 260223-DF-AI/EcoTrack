@@ -7,6 +7,7 @@ import uvicorn
 from SageMaker import upload, deploy, predict, shutdown, animal_loc_analysis, SpeciesStatuses
 from PIL import Image
 from torchvision import transforms
+from database.model_log_database import Database
 
 # from .utils.logger import get_logger, log_execution
 
@@ -18,6 +19,7 @@ app = FastAPI(
 )
 
 species_statuses = SpeciesStatuses()
+audit_db = Database()
 
 std_transform = transforms.Compose([
     transforms.Resize((256, 256)),
@@ -91,11 +93,11 @@ def on_shutdown():
 @app.post("/analyze")
 async def post_classify_animal(request: Request, img_file: UploadFile, additional_info: str=Form()):
     """Classify an uploaded image and return the rendered result page."""
-    img_extensions = ['jpeg', 'jpg', 'png', 'heic']
+    img_extensions = ['jpeg', 'jpg', 'png']
     ext_start_idx = img_file.filename.rfind('.')
     if ext_start_idx == -1 or img_file.filename[ext_start_idx + 1:].lower() not in img_extensions:
         await img_file.close()
-        raise HTTPException(status_code=415, detail="Needs to be an image file type with extensions 'jpeg', 'jpg', 'png', or 'heic'")
+        raise HTTPException(status_code=415, detail="Needs to be an image file type with extensions 'jpeg', 'jpg', or 'png'")
 
     if app.state.predictor is None:
         await img_file.close()
@@ -115,20 +117,20 @@ async def post_classify_animal(request: Request, img_file: UploadFile, additiona
     result = {
         'species' : species,
         'endangered_status': endangered_status,
-        'all statuses': all_statuses,
-        'confidence': confidence
+        'all_statuses': all_statuses,
+        'classifier_confidence': confidence
     }
 
-    # get most critical status of an animal
-    endangered_status = endangered_status[-1]
-    # get the status from the abreviation
-    endangered_status = species_statuses.statuses[endangered_status]
-    # update value in dictionary
-    result['endangered_status'] = endangered_status
-
-    if endangered_status in ['ENDANGERED', 'CRITICALLY ENDANGERED', 'REGIONALLY']:
-        evalutation = animal_loc_analysis(result, additional_info=additional_info)
-        result['unusual_location'] = evalutation['unusual_location']
+    evaluation = {}
+    if endangered_status in ['ENDANGERED', 'CRITICALLY ENDANGERED', 'REGIONALLY EXTINCT']:
+        evaluation = animal_loc_analysis(result, additional_info=additional_info) # get unusual location status from gemini
+        result['unusual_location'] = evaluation['unusual_location']
+    else:
+        evaluation = {"unusual_location": None, "reason": None, "llm_confidence": None}
+    print("after conditional")
+    
+    # log database to have a trail to audit
+    audit_db.add_log(classifier_response=result, llm_response=evaluation)
 
     return templates.TemplateResponse(request=request, name='classify_animal.html', context={'result': result})
 

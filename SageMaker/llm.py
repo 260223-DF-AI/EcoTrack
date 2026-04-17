@@ -1,10 +1,9 @@
 from google import genai
 from dotenv import load_dotenv
 import os
-import graph_of_thoughts
 import json
-import ast
 import re
+
 """In order to be able to run this file you have to:
 1. Go to google AI studio (you can get started for free)
 2a. Navigate to the API Keys tab on the right if not already there
@@ -29,12 +28,12 @@ RESPONSE_FORMAT = {"type": "object",
                         'reason': {
                             "type": "string",
                         }, 
-                        'confidence': {
+                        'llm_confidence': {
                             "type": "number",
                             "minimum": 0.0,
                             "maximum": 100.0,
                         }
-                    }, "required": ["unusual_location", "confidence", "reason"]
+                    }, "required": ["unusual_location", "reason", "llm_confidence"]
                 }
 INJECTION_PATTERNS = [
     r"ignore (all |your )?(previous |prior )?instructions",
@@ -46,30 +45,6 @@ MAX_CHARS = 2000
 
 # create gemini client
 client = genai.Client(api_key=KEY)
-
-# --------------- Graph of Thought Components -----------------------
-
-
-
-# Have code for input sanitation here and compression, aka preprocessing input before passing it through to the LLM
-# can uncomment if you have cuda cores
-# from presidio_analyzer import AnalyzerEngine
-# from presidio_anonymizer import AnonymizerEngine
-# from llmlingua import PromptCompressor
-
-# analyzer = AnalyzerEngine()
-# anonymizer = AnonymizerEngine()
-# compressor = PromptCompressor()
-
-# def sanitize_input(input: str):
-    # # Detect PII entities in the text
-    # results = analyzer.analyze(text=input, language="en")
-
-    # # Replace detected PII with placeholder tags
-    # anonymized = anonymizer.anonymize(text=input, analyzer_results=results).text
-
-    # compressed = compressor.compress_prompt(anonymized, rate=0.5)
-    # return compressed
 
 def preprocess_uinput(raw_input: str) -> str:
     """Preprocesses user provided textual input by validating and sanitizing it before sending it through the LLM
@@ -93,9 +68,14 @@ def preprocess_uinput(raw_input: str) -> str:
     
     return processed_input
 
-def animal_loc_analysis(class_pred: dict, additional_info: str):
-    """Don't forget to write your doc comment, Isabelle"""
-    # additional_info = sanitize_input(additional_info) # uncomment if you have cuda cores to sanitize input before passing it to gemini
+def animal_loc_analysis(class_pred: dict, additional_info: str) -> dict:
+    """Takes the responses from the classifier and the additional user provided context on where the animal was
+    to determine if that animal was spotted in an unusual location
+    Args:
+        class_pred - what the classifier predicted from a user uploaded image
+        additional_info - user provided context on the sighting of the animal pictured
+    Returns:
+        dict - {'unusual_location': bool, 'reason': str, 'llm_confidence': float}"""
     additional_info = preprocess_uinput(additional_info)
     prompt = f"""{IN_CONTEXT}
 
@@ -122,12 +102,10 @@ Additional information/context provided by user:
             'top_p': 0.1
         }
     )
-    print(response.text)
-    response = json.loads(response.text)
-    print(response)
+    response_dt: dict = json.loads(response.text)
 
-    return response
+    return response_dt
 
 if __name__ == '__main__':
     my_input = "Zoo in Sichuan China"
-    animal_loc_analysis({'species': 'panda'}, my_input)
+    response = animal_loc_analysis({'species': 'panda'}, my_input)
