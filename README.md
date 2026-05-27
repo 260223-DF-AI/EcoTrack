@@ -21,6 +21,8 @@ Animals with different "subspecies" with different endangered statuses are all g
 ## Limitations
 - Due to the generality of the species trained on, the image classifier will not discern between specific kinds that might have different endangered statuses. We elected to err on the side of caution and raise an alert assuming the image is of the most threatened species of its family, preferring false positives over false negatives.
 
+## [Presentation](https://docs.google.com/presentation/d/14FDqnv1SS5IvjyLQXF2KQ4eFBpyHMHuKPoIpJtEWKa0/edit?usp=sharing)
+
 # Resources
 
 ## Endangered Status
